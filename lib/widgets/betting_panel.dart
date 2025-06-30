@@ -5,7 +5,8 @@ import 'dart:async';
 class BettingPanel extends StatefulWidget {
   final int playerBalance;
   final GamePhase gamePhase;
-  final Bet? currentBet;
+  final List<Bet> currentBets;
+  final int totalBetAmount;
   final Function(BetSide, int) onBetPlaced;
   final VoidCallback? onRebet;
 
@@ -13,7 +14,8 @@ class BettingPanel extends StatefulWidget {
     Key? key,
     required this.playerBalance,
     required this.gamePhase,
-    this.currentBet,
+    required this.currentBets,
+    required this.totalBetAmount,
     required this.onBetPlaced,
     this.onRebet,
   }) : super(key: key);
@@ -26,7 +28,9 @@ class _BettingPanelState extends State<BettingPanel> {
   int selectedAmount = 50;
   final List<int> chipValues = [25, 50, 100, 250, 500];
   int countdownSeconds = 5;
+  int bettingTimeRemaining = 10;
   Timer? _countdownTimer;
+  Timer? _bettingTimer;
 
   @override
   void initState() {
@@ -37,13 +41,24 @@ class _BettingPanelState extends State<BettingPanel> {
   void didUpdateWidget(BettingPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     
+    // Start betting timer when entering betting phase
+    if (oldWidget.gamePhase != GamePhase.betting && 
+        widget.gamePhase == GamePhase.betting) {
+      _startBettingTimer();
+    }
+    
     // Start countdown when entering readyToPlay phase
     if (oldWidget.gamePhase != GamePhase.readyToPlay && 
         widget.gamePhase == GamePhase.readyToPlay) {
       _startCountdown();
     }
     
-    // Stop countdown when leaving readyToPlay phase
+    // Stop timers when leaving their respective phases
+    if (oldWidget.gamePhase == GamePhase.betting && 
+        widget.gamePhase != GamePhase.betting) {
+      _stopBettingTimer();
+    }
+    
     if (oldWidget.gamePhase == GamePhase.readyToPlay && 
         widget.gamePhase != GamePhase.readyToPlay) {
       _stopCountdown();
@@ -53,6 +68,7 @@ class _BettingPanelState extends State<BettingPanel> {
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _bettingTimer?.cancel();
     super.dispose();
   }
 
@@ -69,6 +85,26 @@ class _BettingPanelState extends State<BettingPanel> {
         timer.cancel();
       }
     });
+  }
+
+  void _startBettingTimer() {
+    bettingTimeRemaining = 10;
+    _bettingTimer?.cancel();
+    
+    _bettingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        bettingTimeRemaining--;
+      });
+      
+      if (bettingTimeRemaining <= 0) {
+        timer.cancel();
+      }
+    });
+  }
+
+  void _stopBettingTimer() {
+    _bettingTimer?.cancel();
+    bettingTimeRemaining = 10;
   }
 
   void _stopCountdown() {
@@ -108,8 +144,8 @@ class _BettingPanelState extends State<BettingPanel> {
           _buildBalanceDisplay(),
           const SizedBox(height: 16),
           
-          // Current Bet Display
-          if (widget.currentBet != null) _buildCurrentBetDisplay(),
+          // Current Bets Display
+          if (widget.currentBets.isNotEmpty) _buildCurrentBetsDisplay(),
           
           // Game Phase Indicator
           _buildGamePhaseIndicator(),
@@ -159,22 +195,64 @@ class _BettingPanelState extends State<BettingPanel> {
     );
   }
 
-  Widget _buildCurrentBetDisplay() {
-    final bet = widget.currentBet!;
+  Widget _buildCurrentBetsDisplay() {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.orange.withOpacity(0.2),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: Colors.orange.shade300),
       ),
-      child: Text(
-        'Current Bet: ${bet.side == BetSide.andar ? 'Andar' : 'Bahar'} - ₹${bet.amount}',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your Bets (Total: ₹${widget.totalBetAmount})',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 60), // Limit height to show ~3 bets
+            child: widget.currentBets.length > 3
+                ? Scrollbar(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: widget.currentBets.length,
+                      itemBuilder: (context, index) {
+                        final bet = widget.currentBets[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            '• ${bet.side == BetSide.andar ? 'Andar' : 'Bahar'}: ₹${bet.amount}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: widget.currentBets.map((bet) => Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        '• ${bet.side == BetSide.andar ? 'Andar' : 'Bahar'}: ₹${bet.amount}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    )).toList(),
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -185,7 +263,7 @@ class _BettingPanelState extends State<BettingPanel> {
     
     switch (widget.gamePhase) {
       case GamePhase.betting:
-        phaseText = 'Choose Your Side & Amount';
+        phaseText = 'Choose Your Side & Amount (${bettingTimeRemaining}s)';
         phaseColor = Colors.green;
         break;
       case GamePhase.readyToPlay:

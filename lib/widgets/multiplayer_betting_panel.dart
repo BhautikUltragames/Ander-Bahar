@@ -54,8 +54,8 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
           _buildBalanceDisplay(playerBalance),
           const SizedBox(height: 16),
           
-          // Current Bet Display
-          if (currentBet != null) _buildCurrentBetDisplay(currentBet),
+          // Current Bets Display
+          _buildCurrentBetDisplay(currentBet ?? {}),
           
           // Game Phase Indicator
           _buildGamePhaseIndicator(gamePhase),
@@ -97,8 +97,40 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
   }
 
   Widget _buildCurrentBetDisplay(Map<String, dynamic> bet) {
-    final side = bet['side']?.toString().toUpperCase() ?? '';
-    final amount = bet['amount'] ?? 0;
+    // Get all bets for current player
+    final gameState = widget.wsService.serverGameState;
+    if (gameState == null) return Container();
+    
+    final allBets = gameState['bets'] as List<dynamic>? ?? [];
+    final playerId = widget.wsService.playerId;
+    if (playerId == null) return Container();
+    
+    final myBets = allBets.where((b) {
+      try {
+        return b != null && b['playerId'] == playerId;
+      } catch (e) {
+        print('Error filtering bet: $e');
+        return false;
+      }
+    }).toList();
+    
+    if (myBets.isEmpty) return Container();
+    
+    int totalAmount = 0;
+    try {
+      totalAmount = myBets.fold(0, (sum, bet) {
+        final amount = bet['amount'];
+        if (amount is int) {
+          return sum + amount;
+        } else if (amount is String) {
+          return sum + (int.tryParse(amount) ?? 0);
+        }
+        return sum;
+      });
+    } catch (e) {
+      print('Error calculating total amount: $e');
+      totalAmount = 0;
+    }
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -107,17 +139,92 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.blue),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 16),
-          const SizedBox(width: 8),
-          Text(
-            'Your Bet: $side - ₹$amount',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle, color: Colors.green, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                'Your Bets (Total: ₹$totalAmount)',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 60), // Limit height to show ~3 bets
+            child: myBets.length > 3
+                ? Scrollbar(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: myBets.length,
+                      itemBuilder: (context, index) {
+                        final bet = myBets[index];
+                        String side = 'UNKNOWN';
+                        String amount = '0';
+                        
+                        try {
+                          side = (bet['side'] ?? 'UNKNOWN').toString().toUpperCase();
+                          final betAmount = bet['amount'];
+                          if (betAmount is int) {
+                            amount = betAmount.toString();
+                          } else if (betAmount is String) {
+                            amount = betAmount;
+                          }
+                        } catch (e) {
+                          print('Error displaying bet: $e');
+                        }
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            '• $side: ₹$amount',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: myBets.map((bet) {
+                      String side = 'UNKNOWN';
+                      String amount = '0';
+                      
+                      try {
+                        side = (bet['side'] ?? 'UNKNOWN').toString().toUpperCase();
+                        final betAmount = bet['amount'];
+                        if (betAmount is int) {
+                          amount = betAmount.toString();
+                        } else if (betAmount is String) {
+                          amount = betAmount;
+                        }
+                      } catch (e) {
+                        print('Error displaying bet: $e');
+                      }
+                      
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          '• $side: ₹$amount',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
           ),
         ],
       ),
@@ -130,7 +237,12 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
     
     switch (gamePhase) {
       case GamePhase.waiting:
-        phaseText = widget.wsService.isHost() ? 'Press START GAME' : 'Waiting for host';
+        final connectedPlayerCount = widget.wsService.getConnectedPlayerCount();
+        if (connectedPlayerCount < 2) {
+          phaseText = 'Waiting for more players (${connectedPlayerCount}/2)';
+        } else {
+          phaseText = widget.wsService.isHost() ? 'Press START GAME' : 'Waiting for host';
+        }
         phaseColor = Colors.orange;
         break;
       case GamePhase.betting:

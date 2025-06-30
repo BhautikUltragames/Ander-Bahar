@@ -19,6 +19,14 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   late ConfettiController _confettiController;
   late AnimationController _cardAnimationController;
   late Animation<double> _cardSlideAnimation;
+  late AnimationController _dealerAnimationController;
+  bool _isThrowingCard = false;
+  bool _throwToAndar = true;
+  Widget? _flyingCard;
+  int _prevAndarCount = 0;
+  int _prevBaharCount = 0;
+  bool _showFlyingCard = false;
+  Alignment _cardTargetAlignment = Alignment(0, -0.8);
   int _bettingTimeRemaining = 10;
   int _previousBalance = 0;
   String? _lastPhase;
@@ -40,6 +48,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
       parent: _cardAnimationController,
       curve: Curves.easeOutBack,
     ));
+    _dealerAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
 
     // Set up WebSocket callbacks
     final wsService = Provider.of<WebSocketService>(context, listen: false);
@@ -56,6 +68,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
         if (phase == 'showResult') {
           _confettiController.play();
         }
+        // Schedule dealer animation on state update
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _listenForCardDealing(wsService);
+        });
       });
     };
     
@@ -84,6 +100,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
   @override
   void dispose() {
+    _dealerAnimationController.dispose();
     _confettiController.dispose();
     _cardAnimationController.dispose();
     
@@ -92,6 +109,59 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     wsService.leaveRoom();
     
     super.dispose();
+  }
+
+  void _listenForCardDealing(WebSocketService wsService) {
+    final gameState = wsService.serverGameState;
+    if (gameState != null) {
+      final andarCards = (gameState['andarCards'] as List).length;
+      final baharCards = (gameState['baharCards'] as List).length;
+      
+      if (andarCards > _prevAndarCount) {
+        final card = _convertToPlayingCard(gameState['andarCards'].last);
+        _triggerDealAnimation(true, card);
+      } else if (baharCards > _prevBaharCount) {
+        final card = _convertToPlayingCard(gameState['baharCards'].last);
+        _triggerDealAnimation(false, card);
+      }
+      _prevAndarCount = andarCards;
+      _prevBaharCount = baharCards;
+    } else {
+      _prevAndarCount = 0;
+      _prevBaharCount = 0;
+    }
+  }
+
+  void _triggerDealAnimation(bool toAndar, PlayingCard dealtCard) {
+    final cardWidget = CardWidget(
+      card: dealtCard,
+      width: 50,
+      height: 75,
+      showAnimation: false,
+    );
+    if (_isThrowingCard) return;
+    setState(() {
+      _isThrowingCard = true;
+      _throwToAndar = toAndar;
+      _flyingCard = cardWidget;
+      _cardTargetAlignment = Alignment(0, -0.8);
+      _showFlyingCard = true;
+    });
+    _dealerAnimationController.forward().then((_) => _dealerAnimationController.reverse());
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (!mounted) return;
+      setState(() {
+        _cardTargetAlignment = toAndar ? Alignment(-0.5, 0.25) : Alignment(0.5, 0.25);
+      });
+    });
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      setState(() {
+        _showFlyingCard = false;
+        _isThrowingCard = false;
+        _flyingCard = null;
+      });
+    });
   }
 
   @override
@@ -110,6 +180,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                   // Top Bar
                   _buildTopBar(wsService),
                   
+                  // Dealer section
+                  _buildDealerSection(wsService),
+                  
                   // Game Table
                   Expanded(
                     child: _buildGameTable(wsService),
@@ -119,6 +192,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                   _buildMultiplayerBettingPanel(wsService),
                 ],
               ),
+              
+              // Flying card animation
+              if (_showFlyingCard && _flyingCard != null)
+                AnimatedAlign(
+                  alignment: _cardTargetAlignment,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutQuart,
+                  child: Transform.rotate(
+                    angle: _throwToAndar ? -0.3 : 0.3,
+                    child: _flyingCard,
+                  ),
+                ),
               
               // Confetti overlay
               Align(
@@ -137,7 +222,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                 ),
               ),
               
-              // Winner overlay
+              // Winner overlay - show during showResult phase (game continues even if players disconnect)
               if (wsService.getGamePhase() == GamePhase.showResult)
                 _buildWinnerOverlay(wsService),
             ],
@@ -253,6 +338,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                   width: 80,
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
@@ -316,7 +402,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     
     switch (phase) {
       case GamePhase.waiting:
-        phaseText = wsService.isHost() ? 'Press START GAME' : 'Waiting for host';
+        final connectedPlayerCount = wsService.getConnectedPlayerCount();
+        if (connectedPlayerCount < 2) {
+          phaseText = 'Waiting for more players to join (${connectedPlayerCount}/2)';
+        } else {
+          phaseText = wsService.isHost() ? 'Press START GAME' : 'Waiting for host';
+        }
         phaseColor = Colors.orange;
         break;
       case GamePhase.betting:
@@ -529,12 +620,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
               children: [
                 Icon(Icons.celebration, size: 48, color: winnerColor),
                 const SizedBox(height: 16),
+                // Show result for current player first (main message)
+                Text(
+                  didWin == true ? 'You Win!' : 'You Lose',
+                  style: TextStyle(
+                    color: didWin == true ? Colors.green : Colors.red,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Text(
                   winnerText,
                   style: TextStyle(
                     color: winnerColor,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -582,6 +683,38 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDealerSection(WebSocketService wsService) {
+    final phase = wsService.getGamePhase();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: _dealerAnimationController,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(
+                _dealerAnimationController.value * (_throwToAndar ? -15 : 15),
+                -_dealerAnimationController.value * 10,
+              ),
+              child: CircleAvatar(
+                radius: 30,
+                backgroundColor: Colors.brown.shade700,
+                child: Text('🎩', style: const TextStyle(fontSize: 24)),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'DEALER',
+          style: TextStyle(color: Colors.white.withOpacity(0.8)),
+        ),
+        if (phase == GamePhase.dealing)
+          Text('Dealing...', style: TextStyle(color: Colors.yellow.withOpacity(0.8), fontSize: 12)),
+      ],
     );
   }
 

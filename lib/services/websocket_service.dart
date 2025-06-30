@@ -111,15 +111,27 @@ class WebSocketService extends ChangeNotifier {
           break;
           
         case 'gameState':
-          print('DEBUG: Game state phase: ${data['gameState']?['phase']}');
+          final newPhase = data['gameState']?['phase'];
           _serverGameState = data['gameState'];
           _players = List<Map<String, dynamic>>.from(data['players'] ?? []);
+          final connectedCount = _players.where((p) => p['isConnected'] == true).length;
+          print('DEBUG: Game state phase: $newPhase, Connected players: $connectedCount');
           onGameStateUpdate?.call(_serverGameState!, _players);
           break;
           
         case 'roomList':
           final rooms = List<Map<String, dynamic>>.from(data['rooms'] ?? []);
           onRoomListUpdate?.call(rooms);
+          break;
+          
+        case 'ping':
+          // Respond to server ping with pong
+          _sendMessage({
+            'type': 'pong',
+            'pingId': data['pingId'],
+            'roomId': data['roomId'],
+          });
+          print('DEBUG: Received ping, sent pong response');
           break;
           
         case 'error':
@@ -251,6 +263,11 @@ class WebSocketService extends ChangeNotifier {
       default:
         return GamePhase.waiting;
     }
+  }
+  
+  // Get connected player count
+  int getConnectedPlayerCount() {
+    return _players.where((player) => player['isConnected'] == true).length;
   }
   
   // Get betting timer remaining time (estimated)

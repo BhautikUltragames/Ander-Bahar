@@ -90,10 +90,8 @@ class GameState {
       return false;
     }
     
-    // Remove previous bet from same player if exists
-    bets.removeWhere((bet) => bet.playerId == playerId);
-    
-    // Add new bet
+    // Allow multiple bets - don't remove previous bets
+    // Just add new bet and deduct balance
     bets.add(Bet(side: side, amount: amount, playerId: playerId));
     playerBalances[playerId] = playerBalances[playerId]! - amount;
     
@@ -181,13 +179,25 @@ class GameState {
         .fold(0, (sum, bet) => sum + bet.amount);
   }
 
-  // Get player's current bet
+  // Get player's current bet (first bet for compatibility)
   Bet? getPlayerBet(String playerId) {
     try {
       return bets.firstWhere((bet) => bet.playerId == playerId);
     } catch (e) {
       return null;
     }
+  }
+
+  // Get all bets for a player
+  List<Bet> getPlayerBets(String playerId) {
+    return bets.where((bet) => bet.playerId == playerId).toList();
+  }
+
+  // Get total bet amount for a player
+  int getPlayerTotalBetAmount(String playerId) {
+    return bets
+        .where((bet) => bet.playerId == playerId)
+        .fold(0, (sum, bet) => sum + bet.amount);
   }
 
   // Clone game state for immutability

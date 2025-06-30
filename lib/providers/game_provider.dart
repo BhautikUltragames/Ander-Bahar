@@ -52,9 +52,14 @@ class GameProvider extends ChangeNotifier {
     _dealingTimer?.cancel();
     
     _gameState.startNewRound();
+    // If single-player, place initial AI bet once per round
+    if (_isAIGame) {
+      _aiPlaceBet();
+    }
     notifyListeners();
     
-    // No automatic timer - wait for user to place bet
+    // Start 10-second betting timer
+    _startBettingTimer();
   }
 
   // Place a bet
@@ -67,15 +72,10 @@ class GameProvider extends ChangeNotifier {
     if (success) {
       notifyListeners();
       
-      // AI also places a bet if this is an AI game
-      if (_isAIGame) {
+      // AI also places a bet if this is an AI game (only once per round)
+      if (_isAIGame && _gameState.getPlayerBets('ai_1').isEmpty) {
         _aiPlaceBet();
       }
-      
-      // Start countdown immediately after bet is placed
-      _gameState.phase = GamePhase.readyToPlay;
-      notifyListeners();
-      _startCountdownTimer();
     }
   }
 
@@ -95,11 +95,24 @@ class GameProvider extends ChangeNotifier {
     }
   }
 
-  // Automatic countdown timer (10 seconds)
+  // Start 10-second betting timer
+  void _startBettingTimer() {
+    if (_gameState.phase != GamePhase.betting) return;
+    
+    _bettingTimer = Timer(const Duration(seconds: 10), () {
+      if (_gameState.phase == GamePhase.betting) {
+        _gameState.phase = GamePhase.readyToPlay;
+        notifyListeners();
+        _startCountdownTimer();
+      }
+    });
+  }
+
+  // Automatic countdown timer (5 seconds)
   void _startCountdownTimer() {
     if (_gameState.phase != GamePhase.readyToPlay) return;
     
-    Timer(const Duration(seconds: 10), () {
+    Timer(const Duration(seconds: 5), () {
       if (_gameState.phase == GamePhase.readyToPlay) {
         _startDealing();
       }
@@ -175,6 +188,16 @@ class GameProvider extends ChangeNotifier {
   // Get current player's bet
   Bet? getCurrentPlayerBet() {
     return _gameState.getPlayerBet(_currentPlayerId);
+  }
+
+  // Get all current player's bets
+  List<Bet> getCurrentPlayerBets() {
+    return _gameState.getPlayerBets(_currentPlayerId);
+  }
+
+  // Get current player's total bet amount
+  int getCurrentPlayerTotalBet() {
+    return _gameState.getPlayerTotalBetAmount(_currentPlayerId);
   }
 
   // Quick bet functions for common amounts

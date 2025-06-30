@@ -47,9 +47,11 @@ npm start
 - **Room Management**: Create and join game rooms with unique 8-character room IDs
 - **Real-time Multiplayer**: Up to 6 players per room with WebSocket communication
 - **Complete Game Logic**: Full Andar Bahar game implementation on server
-- **Host Controls**: Room creator can start games and manage settings
-- **Synchronized Betting Timer**: 5-second betting phase for all players
-- **Reconnection Support**: 30-second grace period for disconnected players
+- **Smart Game Start**: Host manually starts initial game, then auto-starts new rounds
+- **Continuous Gameplay**: Games continue even if players disconnect during active rounds
+- **Synchronized Betting Timer**: 10-second server window with 5-second UI countdown
+- **Ping-Pong Verification**: Ensures only truly connected players count toward minimum
+- **Reconnection Support**: 10-second grace period for disconnected players
 - **Automatic Cleanup**: Empty rooms are automatically removed
 - **Fair Play**: Server-authoritative game state prevents cheating
 
@@ -64,12 +66,12 @@ npm start
 
 ### **Game Flow**
 
-1. **Waiting Phase**: Players join the room, host can start when ready
-2. **Betting Phase**: 5-second synchronized timer for placing bets
+1. **Waiting Phase**: Players join the room, host must manually start initial game
+2. **Betting Phase**: 10-second synchronized timer for placing multiple bets (5-second UI countdown)
 3. **Ready to Play**: Brief transition phase after betting ends
-4. **Dealing Phase**: Cards dealt alternately until match found
-5. **Show Result**: Display winner and calculate payouts
-6. **New Round**: Automatic restart after 5 seconds
+4. **Dealing Phase**: Cards dealt alternately until match found (continues even if players disconnect)
+5. **Show Result**: Display winner and calculate payouts for 5 seconds
+6. **Auto New Rounds**: Subsequent rounds start automatically when 2+ players present
 
 ### **WebSocket Messages**
 
@@ -160,8 +162,10 @@ npm start
 ```javascript
 const PORT = process.env.PORT || 8080; // Default port 8080
 const MAX_PLAYERS_PER_ROOM = 6; // Maximum players per room
-const BETTING_TIME = 10000; // 10 seconds betting time
-const RECONNECTION_GRACE = 30000; // 30 seconds reconnection grace
+const BETTING_TIME = 10000; // 10 seconds betting time (server-side)
+const UI_COUNTDOWN = 5000; // 5 seconds UI countdown (client-side)
+const RECONNECTION_GRACE = 10000; // 10 seconds reconnection grace
+const PING_TIMEOUT = 3000; // 3 seconds ping-pong verification
 ```
 
 ### **Environment Variables**
