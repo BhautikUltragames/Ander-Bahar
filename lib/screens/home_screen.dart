@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'game_screen.dart';
 import 'multiplayer_lobby_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -9,6 +8,102 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+class _HoverButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final double width;
+  final double height;
+
+  const _HoverButton({
+    required this.child,
+    required this.onTap,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  State<_HoverButton> createState() => _HoverButtonState();
+}
+
+class _HoverButtonState extends State<_HoverButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedScale(
+        scale: _isHovered ? 1.05 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        child: Container(
+          width: widget.width,
+          height: widget.height,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: widget.onTap,
+              child: widget.child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryHoverButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final double width;
+  final double height;
+
+  const _SecondaryHoverButton({
+    required this.child,
+    required this.onTap,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  State<_SecondaryHoverButton> createState() => _SecondaryHoverButtonState();
+}
+
+class _SecondaryHoverButtonState extends State<_SecondaryHoverButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedScale(
+        scale: _isHovered ? 1.05 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        child: Container(
+          width: widget.width,
+          height: widget.height,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(15),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(15),
+              onTap: widget.onTap,
+              child: widget.child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
@@ -16,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<Offset> _slideAnimation;
   late Animation<Offset> _button1SlideAnimation;
   late Animation<Offset> _button2SlideAnimation;
-  late Animation<Offset> _button3SlideAnimation;
 
   @override
   void initState() {
@@ -42,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen>
       curve: const Interval(0.0, 0.4, curve: Curves.easeOutBack),
     ));
 
-    // Button 1 - Slide from left
+    // Button 1 - Multiplayer - Slide from left
     _button1SlideAnimation = Tween<Offset>(
       begin: const Offset(-1.5, 0),
       end: Offset.zero,
@@ -51,22 +145,13 @@ class _HomeScreenState extends State<HomeScreen>
       curve: const Interval(0.3, 0.7, curve: Curves.easeOutBack),
     ));
 
-    // Button 2 - Slide from right
+    // Button 2 - How to Play - Slide from right
     _button2SlideAnimation = Tween<Offset>(
       begin: const Offset(1.5, 0),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _animationController,
       curve: const Interval(0.5, 0.9, curve: Curves.easeOutBack),
-    ));
-
-    // Button 3 - Slide from bottom
-    _button3SlideAnimation = Tween<Offset>(
-      begin: const Offset(0, 1.5),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.7, 1.0, curve: Curves.easeOutBack),
     ));
 
     _animationController.forward();
@@ -117,8 +202,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               
-              // Footer
-              _buildFooter(),
+
             ],
           ),
         ),
@@ -211,81 +295,66 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Game mode selection text
-                     const Text(
-             'Choose Your Game Mode',
-             textAlign: TextAlign.center,
-             style: TextStyle(
-               fontSize: 20,
-               fontWeight: FontWeight.w600,
-               color: Colors.white,
-             ),
-           ),
+          // Welcome text
+          const Text(
+            'Welcome to Multiplayer Andar Bahar',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
           
-          const SizedBox(height: 40),
+          const SizedBox(height: 12),
           
-          // Human vs AI button - Slide from left
+          const Text(
+            'Join the global room to play with players from around the world',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white70,
+            ),
+          ),
+          
+          const SizedBox(height: 60),
+          
+          // Multiplayer button - Slide from left
           AnimatedBuilder(
             animation: _animationController,
             builder: (context, child) {
               return SlideTransition(
                 position: _button1SlideAnimation,
                 child: _buildGameModeButton(
-            title: 'HUMAN vs AI',
-            subtitle: 'Play against computer',
-            icon: Icons.smart_toy,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.blue.shade600,
-                Colors.blue.shade800,
-              ],
-            ),
-            onTap: () => _navigateToGame(true),
-          ),
+                  title: 'PLAY',
+                  subtitle: 'Play with other players worldwide',
+                  icon: Icons.play_arrow,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.green.shade600,
+                      Colors.green.shade800,
+                    ],
+                  ),
+                  onTap: () => _navigateToMultiplayer(),
+                ),
               );
             },
           ),
           
-          const SizedBox(height: 30),
+          const SizedBox(height: 40),
           
-          // Multiplayer button - Slide from right
+          // How to play button - Slide from right
           AnimatedBuilder(
             animation: _animationController,
             builder: (context, child) {
               return SlideTransition(
                 position: _button2SlideAnimation,
-                child: _buildGameModeButton(
-            title: 'MULTIPLAYER',
-            subtitle: 'Play with other players',
-            icon: Icons.group,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.green.shade600,
-                Colors.green.shade800,
-              ],
-            ),
-            onTap: () => _navigateToGame(false),
-          ),
-              );
-            },
-          ),
-          
-          const SizedBox(height: 50),
-          
-          // How to play button - Slide from bottom
-          AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return SlideTransition(
-                position: _button3SlideAnimation,
                 child: _buildSecondaryButton(
-            title: 'HOW TO PLAY',
-            icon: Icons.help_outline,
-            onTap: _showHowToPlay,
+                  title: 'HOW TO PLAY',
+                  icon: Icons.help_outline,
+                  onTap: _showHowToPlay,
                 ),
               );
             },
@@ -295,6 +364,8 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+
+
   Widget _buildGameModeButton({
     required String title,
     required String subtitle,
@@ -302,87 +373,81 @@ class _HomeScreenState extends State<HomeScreen>
     required Gradient gradient,
     required VoidCallback onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      height: 100,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: gradient,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                // Icon
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      bottomLeft: Radius.circular(20),
-                    ),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 36,
-                    color: Colors.white,
+    return Center(
+      child: _HoverButton(
+        width: MediaQuery.of(context).size.width * 0.7,
+        height: 120,
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              // Icon
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    bottomLeft: Radius.circular(20),
                   ),
                 ),
-                
-                // Text content
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
+                child: Icon(
+                  icon,
+                  size: 40,
+                  color: Colors.white,
+                ),
+              ),
+              
+              // Text content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
                           title,
                           style: const TextStyle(
-                              fontSize: 20,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
-                          ),
                         ),
-                        const SizedBox(height: 6),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
+                      ),
+                      const SizedBox(height: 8),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
                           subtitle,
                           style: const TextStyle(
-                              fontSize: 16,
+                            fontSize: 16,
                             color: Colors.white70,
-                            ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                
-                // Arrow
-                const Padding(
-                  padding: EdgeInsets.only(right: 20),
-                  child: Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.white,
-                    size: 24,
-                  ),
+              ),
+              
+              // Arrow
+              const Padding(
+                padding: EdgeInsets.only(right: 20),
+                child: Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white,
+                  size: 28,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -394,112 +459,52 @@ class _HomeScreenState extends State<HomeScreen>
     required IconData icon,
     required VoidCallback onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      height: 70,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(15),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(15),
-          onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 2,
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 28,
-                  color: Colors.red.shade700,
-                ),
-                const SizedBox(width: 16),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                  title,
-                    style: TextStyle(
-                      fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                      color: Colors.red.shade700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return Center(
+      child: _SecondaryHoverButton(
+        width: MediaQuery.of(context).size.width * 0.7,
+        height: 70,
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(15),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFooter() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          const Text(
-            'Free to Play • No Real Money',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.white60,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.star,
-                size: 16,
-                color: Colors.yellow,
+              Icon(
+                icon,
+                size: 28,
+                color: Colors.red.shade700,
               ),
-              const SizedBox(width: 4),
-              const Text(
-                'Authentic Indian Gaming Experience',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white60,
+              const SizedBox(width: 16),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red.shade700,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.star,
-                size: 16,
-                color: Colors.yellow,
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  void _navigateToGame(bool isAIGame) {
-    if (isAIGame) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => GameScreen(isAIGame: isAIGame),
-        ),
-      );
-    } else {
-      // Navigate to multiplayer lobby
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MultiplayerLobbyScreen(),
-        ),
-      );
-    }
+
+
+  void _navigateToMultiplayer() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const MultiplayerLobbyScreen(),
+      ),
+    );
   }
 
   void _showHowToPlay() {
@@ -513,28 +518,34 @@ class _HomeScreenState extends State<HomeScreen>
             mainAxisSize: MainAxisSize.min,
             children: const [
               Text(
-                '1. Game Setup',
+                '1. Join the Game',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text('• Enter your name to join the global room\n• Connect with players from around the world\n'),
+              
+              Text(
+                '2. Game Setup',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               Text('• A single deck of 52 cards is used\n• Two betting areas: Andar (Left) and Bahar (Right)\n'),
               
               Text(
-                '2. How to Play',
+                '3. How to Play',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              Text('• Place your bet on either Andar or Bahar\n• A Joker card is revealed in the center\n• Cards are dealt alternately to both sides\n'),
+              Text('• Each round lasts 10 seconds for betting\n• Place your bet on either Andar or Bahar\n• A Joker card is revealed in the center\n• Cards are dealt alternately to both sides\n'),
               
               Text(
-                '3. Starting Rule',
+                '4. Starting Rule',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               Text('• If Joker is BLACK (♣♠): First card goes to Andar\n• If Joker is RED (♥♦): First card goes to Bahar\n'),
               
               Text(
-                '4. Winning',
+                '5. Winning',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              Text('• The side that gets a card matching the Joker\'s rank wins\n• Andar pays 0.9:1, Bahar pays 1:1'),
+              Text('• The side that gets a card matching the Joker\'s rank wins\n• Winners get 95% return on their bet (5% house edge)\n• New rounds start automatically every 10 seconds'),
             ],
           ),
         ),

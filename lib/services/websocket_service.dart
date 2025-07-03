@@ -9,7 +9,6 @@ class WebSocketService extends ChangeNotifier {
   StreamSubscription? _subscription;
   bool _isConnected = false;
   String? _playerId;
-  String? _roomId;
   
   // Game state from server
   Map<String, dynamic>? _serverGameState;
@@ -17,23 +16,39 @@ class WebSocketService extends ChangeNotifier {
   
   // Connection callbacks
   Function(String message)? onError;
-  Function(String roomId, String playerId)? onRoomCreated;
-  Function(String roomId, String playerId)? onRoomJoined;
-  Function()? onRoomLeft;
+  Function()? onJoinedGlobal;
   Function(Map<String, dynamic> gameState, List<Map<String, dynamic>> players)? onGameStateUpdate;
-  Function(List<Map<String, dynamic>> rooms)? onRoomListUpdate;
   
   // Getters
   bool get isConnected => _isConnected;
   String? get playerId => _playerId;
-  String? get roomId => _roomId;
   Map<String, dynamic>? get serverGameState => _serverGameState;
   List<Map<String, dynamic>> get players => _players;
   
-  // Connect to WebSocket server
-  Future<void> connect({String serverUrl = 'ws://localhost:8080'}) async {
+  // Get current player data
+  Map<String, dynamic>? getCurrentPlayer() {
+    if (_playerId == null) return null;
+    return _players.firstWhere(
+      (player) => player['id'] == _playerId,
+      orElse: () => <String, dynamic>{},
+    );
+  }
+  
+  // Get current player balance
+  int getPlayerBalance() {
+    final player = getCurrentPlayer();
+    return player?['balance'] ?? 0;
+  }
+  
+  // Get betting time remaining
+  int getBettingTimeLeft() {
+    return _serverGameState?['bettingTimeLeft'] ?? 0;
+  }
+  
+  // Connect to WebSocket server and auto-join global room
+  Future<void> connectAndJoinGlobal(String playerName) async {
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(serverUrl));
+      _channel = WebSocketChannel.connect(Uri.parse('ws://localhost:8080'));
       
       _subscription = _channel!.stream.listen(
         (message) {
@@ -43,21 +58,25 @@ class WebSocketService extends ChangeNotifier {
           print('WebSocket error: $error');
           _isConnected = false;
           onError?.call('Connection error: $error');
-          // Delay notifyListeners to avoid setState during build
           Future.microtask(() => notifyListeners());
         },
         onDone: () {
           print('WebSocket connection closed');
           _isConnected = false;
-          // Delay notifyListeners to avoid setState during build
           Future.microtask(() => notifyListeners());
         },
       );
       
       _isConnected = true;
-      // Delay notifyListeners to avoid setState during build
-      Future.microtask(() => notifyListeners());
       print('Connected to WebSocket server');
+      
+      // Auto-join global room
+      _sendMessage({
+        'type': 'joinGlobal',
+        'playerName': playerName,
+      });
+      
+      Future.microtask(() => notifyListeners());
     } catch (e) {
       print('Failed to connect: $e');
       onError?.call('Failed to connect: $e');
@@ -70,7 +89,6 @@ class WebSocketService extends ChangeNotifier {
     _channel?.sink.close();
     _isConnected = false;
     _playerId = null;
-    _roomId = null;
     _serverGameState = null;
     _players.clear();
     notifyListeners();
@@ -90,48 +108,32 @@ class WebSocketService extends ChangeNotifier {
       print('DEBUG: Received message: ${data['type']}');
       
       switch (data['type']) {
-        case 'roomCreated':
+        case 'joinedGlobal':
           _playerId = data['playerId'];
-          _roomId = data['roomId'];
-          onRoomCreated?.call(data['roomId'], data['playerId']);
-          break;
-          
-        case 'roomJoined':
-          _playerId = data['playerId'];
-          _roomId = data['roomId'];
-          onRoomJoined?.call(data['roomId'], data['playerId']);
-          break;
-          
-        case 'leftRoom':
-          _playerId = null;
-          _roomId = null;
-          _serverGameState = null;
-          _players.clear();
-          onRoomLeft?.call();
+          print('Successfully joined global room as ${_playerId}');
+          onJoinedGlobal?.call();
           break;
           
         case 'gameState':
-          final newPhase = data['gameState']?['phase'];
           _serverGameState = data['gameState'];
           _players = List<Map<String, dynamic>>.from(data['players'] ?? []);
-          final connectedCount = _players.where((p) => p['isConnected'] == true).length;
-          print('DEBUG: Game state phase: $newPhase, Connected players: $connectedCount');
+          
+          // If we don't have a playerId yet, try to find ourselves in the players list
+          if (_playerId == null && _players.isNotEmpty) {
+            // Find our player based on the most recent connection (last in list)
+            final lastPlayer = _players.last;
+            _playerId = lastPlayer['id'];
+            print('Auto-detected player ID: ${_playerId}');
+            // Trigger the join callback since we've successfully joined
+            onJoinedGlobal?.call();
+          }
+          
+          final phase = _serverGameState?['phase'];
+          final round = _serverGameState?['roundNumber'] ?? 0;
+          final timeLeft = _serverGameState?['bettingTimeLeft'] ?? 0;
+          print('DEBUG: Game state - Phase: $phase, Round: $round, Time: ${timeLeft}s, Players: ${_players.length}');
+          
           onGameStateUpdate?.call(_serverGameState!, _players);
-          break;
-          
-        case 'roomList':
-          final rooms = List<Map<String, dynamic>>.from(data['rooms'] ?? []);
-          onRoomListUpdate?.call(rooms);
-          break;
-          
-        case 'ping':
-          // Respond to server ping with pong
-          _sendMessage({
-            'type': 'pong',
-            'pingId': data['pingId'],
-            'roomId': data['roomId'],
-          });
-          print('DEBUG: Received ping, sent pong response');
           break;
           
         case 'error':
@@ -143,143 +145,21 @@ class WebSocketService extends ChangeNotifier {
           print('Unknown message type: ${data['type']}');
       }
       
-      // Delay notifyListeners to avoid setState during build
       Future.microtask(() => notifyListeners());
     } catch (e) {
       print('Error parsing message: $e');
     }
   }
   
-  // Create a new room
-  void createRoom(String playerName) {
-    _sendMessage({
-      'type': 'createRoom',
-      'playerName': playerName,
-    });
-  }
-  
-  // Join an existing room
-  void joinRoom(String roomId, String playerName) {
-    _sendMessage({
-      'type': 'joinRoom',
-      'roomId': roomId,
-      'playerName': playerName,
-    });
-  }
-  
-  // Leave current room
-  void leaveRoom() {
-    if (_roomId != null) {
-      _sendMessage({
-        'type': 'leaveRoom',
-        'roomId': _roomId,
-      });
-    }
-  }
-  
-  // Start game (host only)
-  void startGame() {
-    print('DEBUG: startGame() called');
-    print('DEBUG: _roomId = $_roomId');
-    print('DEBUG: _isConnected = $_isConnected');
-    print('DEBUG: isHost() = ${isHost()}');
-    
-    if (_roomId != null) {
-      print('DEBUG: Sending startGame message to server');
-      _sendMessage({
-        'type': 'startGame',
-        'roomId': _roomId,
-      });
-    } else {
-      print('DEBUG: Cannot start game - no room ID');
-    }
-  }
-  
   // Place a bet
   void placeBet(String side, int amount) {
-    if (_roomId != null) {
+    if (_playerId != null && _isConnected) {
+      print('DEBUG: Placing bet - Side: $side, Amount: ₹$amount');
       _sendMessage({
         'type': 'placeBet',
-        'roomId': _roomId,
         'side': side,
         'amount': amount,
       });
     }
-  }
-  
-  // Get list of available rooms
-  void getRooms() {
-    _sendMessage({
-      'type': 'getRooms',
-    });
-  }
-  
-  // Get current player info
-  Map<String, dynamic>? getCurrentPlayer() {
-    if (_playerId == null) return null;
-    
-    try {
-      return _players.firstWhere((player) => player['id'] == _playerId);
-    } catch (e) {
-      return null;
-    }
-  }
-  
-  // Check if current player is host
-  bool isHost() {
-    final player = getCurrentPlayer();
-    return player?['isHost'] ?? false;
-  }
-  
-  // Get player balance
-  int getPlayerBalance() {
-    final player = getCurrentPlayer();
-    return player?['balance'] ?? 0;
-  }
-  
-  // Get current bet for player
-  Map<String, dynamic>? getCurrentBet() {
-    final player = getCurrentPlayer();
-    return player?['currentBet'];
-  }
-  
-  // Convert server game state to local GamePhase
-  GamePhase getGamePhase() {
-    if (_serverGameState == null) return GamePhase.waiting;
-    
-    switch (_serverGameState!['phase']) {
-      case 'waiting':
-        return GamePhase.waiting;
-      case 'betting':
-        return GamePhase.betting;
-      case 'readyToPlay':
-        return GamePhase.readyToPlay;
-      case 'dealing':
-        return GamePhase.dealing;
-      case 'finished':
-        return GamePhase.finished;
-      case 'showResult':
-        return GamePhase.showResult;
-      default:
-        return GamePhase.waiting;
-    }
-  }
-  
-  // Get connected player count
-  int getConnectedPlayerCount() {
-    return _players.where((player) => player['isConnected'] == true).length;
-  }
-  
-  // Get betting timer remaining time (estimated)
-  int getBettingTimeRemaining() {
-    // This would need to be calculated based on server timing
-    // For now, return a default value
-    return 5;
-  }
-  
-  @override
-  void dispose() {
-    disconnect();
-    super.dispose();
   }
 } 

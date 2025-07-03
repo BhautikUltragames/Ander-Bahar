@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/game_state.dart';
 import '../models/card.dart';
@@ -9,12 +8,10 @@ class GameProvider extends ChangeNotifier {
   Timer? _bettingTimer;
   Timer? _dealingTimer;
   String _currentPlayerId = 'player_1';
-  bool _isAIGame = false;
   
   // Getters
   GameState get gameState => _gameState;
   String get currentPlayerId => _currentPlayerId;
-  bool get isAIGame => _isAIGame;
   
   // Initialize player with starting balance
   void initializePlayer(String playerId, {int startingBalance = 5000}) {
@@ -23,21 +20,8 @@ class GameProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Start a new game (Human vs AI)
-  void startAIGame() {
-    _isAIGame = true;
-    _gameState = GameState(isMultiplayer: false);
-    
-    // Initialize player and AI balances
-    initializePlayer('player_1', startingBalance: 5000);
-    _gameState.playerBalances['ai_1'] = 5000;
-    
-    startNewRound();
-  }
-
   // Start multiplayer game
   void startMultiplayerGame() {
-    _isAIGame = false;
     _gameState = GameState(isMultiplayer: true);
     
     // Initialize player balance
@@ -52,10 +36,6 @@ class GameProvider extends ChangeNotifier {
     _dealingTimer?.cancel();
     
     _gameState.startNewRound();
-    // If single-player, place initial AI bet once per round
-    if (_isAIGame) {
-      _aiPlaceBet();
-    }
     notifyListeners();
     
     // Start 10-second betting timer
@@ -71,27 +51,6 @@ class GameProvider extends ChangeNotifier {
     
     if (success) {
       notifyListeners();
-      
-      // AI also places a bet if this is an AI game (only once per round)
-      if (_isAIGame && _gameState.getPlayerBets('ai_1').isEmpty) {
-        _aiPlaceBet();
-      }
-    }
-  }
-
-  // AI places a bet
-  void _aiPlaceBet() {
-    int aiBalance = _gameState.playerBalances['ai_1'] ?? 0;
-    if (aiBalance < 25) return;
-    
-    final random = Random();
-    final side = random.nextBool() ? BetSide.andar : BetSide.bahar;
-    final amounts = [25, 50, 100, 250];
-    final availableAmounts = amounts.where((amount) => amount <= aiBalance).toList();
-    
-    if (availableAmounts.isNotEmpty) {
-      final amount = availableAmounts[random.nextInt(availableAmounts.length)];
-      _gameState.placeBet(side, amount, 'ai_1');
     }
   }
 

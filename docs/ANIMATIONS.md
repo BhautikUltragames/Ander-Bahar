@@ -2,7 +2,7 @@
 
 ## 📋 Overview
 
-This document provides comprehensive documentation of all animations, transitions, and motion effects used in the Andar Bahar Flutter web game. Use this as a reference for maintaining animation consistency and implementing new animated features.
+This document provides comprehensive documentation of all animations, transitions, and motion effects used in the Andar Bahar Flutter web game, including the new animated card dealer system. Use this as a reference for maintaining animation consistency and implementing new animated features.
 
 ## 🎯 Animation Principles
 

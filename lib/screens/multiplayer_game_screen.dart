@@ -4,6 +4,7 @@ import 'package:confetti/confetti.dart';
 import '../services/websocket_service.dart';
 import '../widgets/card_widget.dart';
 import '../widgets/multiplayer_betting_panel.dart';
+import '../widgets/animated_card_dealer.dart';
 import '../models/card.dart';
 import '../models/game_state.dart';
 
@@ -56,28 +57,24 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     // Set up WebSocket callbacks
     final wsService = Provider.of<WebSocketService>(context, listen: false);
     wsService.onGameStateUpdate = (gameState, players) {
-      setState(() {
-        final phase = gameState['phase'] as String?;
-        // Capture balance when betting phase starts
-        if (phase == 'betting' && _lastPhase != 'betting') {
-          _previousBalance = wsService.getPlayerBalance();
-          _startBettingTimer();
-        }
-        _lastPhase = phase;
-        // Show confetti on win
-        if (phase == 'showResult') {
-          _confettiController.play();
-        }
-        // Schedule dealer animation on state update
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _listenForCardDealing(wsService);
+      if (mounted) {
+        setState(() {
+          final phase = gameState['phase'] as String?;
+          
+          // Show confetti when round finishes
+          if (phase == 'finished') {
+            _confettiController.play();
+          }
+          
+          // Schedule dealer animation on state update
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _listenForCardDealing(wsService);
+          });
         });
-      });
+      }
     };
     
-    wsService.onRoomLeft = () {
-      Navigator.pop(context);
-    };
+
   }
 
   void _startBettingTimer() {
@@ -104,9 +101,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     _confettiController.dispose();
     _cardAnimationController.dispose();
     
-    // Leave room when screen is disposed
+    // Disconnect when screen is disposed
     final wsService = Provider.of<WebSocketService>(context, listen: false);
-    wsService.leaveRoom();
+    wsService.disconnect();
     
     super.dispose();
   }
@@ -114,18 +111,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   void _listenForCardDealing(WebSocketService wsService) {
     final gameState = wsService.serverGameState;
     if (gameState != null) {
-      final andarCards = (gameState['andarCards'] as List).length;
-      final baharCards = (gameState['baharCards'] as List).length;
-      
-      if (andarCards > _prevAndarCount) {
-        final card = _convertToPlayingCard(gameState['andarCards'].last);
-        _triggerDealAnimation(true, card);
-      } else if (baharCards > _prevBaharCount) {
-        final card = _convertToPlayingCard(gameState['baharCards'].last);
-        _triggerDealAnimation(false, card);
-      }
-      _prevAndarCount = andarCards;
-      _prevBaharCount = baharCards;
+      // Simply update previous counts for instantaneous display
+      _prevAndarCount = (gameState['andarCards'] as List).length;
+      _prevBaharCount = (gameState['baharCards'] as List).length;
     } else {
       _prevAndarCount = 0;
       _prevBaharCount = 0;
@@ -174,36 +162,33 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
               // Background
               _buildBackground(),
               
-              // Main Game Layout
-              Column(
+              // Main Layout with Player Panel
+              Row(
                 children: [
-                  // Top Bar
-                  _buildTopBar(wsService),
+                  // Left Player Panel
+                  _buildPlayerPanel(wsService),
                   
-                  // Dealer section
-                  _buildDealerSection(wsService),
-                  
-                  // Game Table
+                  // Main Game Area
                   Expanded(
-                    child: _buildGameTable(wsService),
+                    child: Column(
+                      children: [
+                        // Top Bar
+                        _buildTopBar(wsService),
+                        
+                        // Dealer section removed
+                        
+                        // Game Table
+                        Expanded(
+                          child: _buildGameTable(wsService),
+                        ),
+                        
+                        // Multiplayer Betting Panel
+                        _buildMultiplayerBettingPanel(wsService),
+                      ],
+                    ),
                   ),
-                  
-                  // Multiplayer Betting Panel
-                  _buildMultiplayerBettingPanel(wsService),
                 ],
               ),
-              
-              // Flying card animation
-              if (_showFlyingCard && _flyingCard != null)
-                AnimatedAlign(
-                  alignment: _cardTargetAlignment,
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOutQuart,
-                  child: Transform.rotate(
-                    angle: _throwToAndar ? -0.3 : 0.3,
-                    child: _flyingCard,
-                  ),
-                ),
               
               // Confetti overlay
               Align(
@@ -222,8 +207,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                 ),
               ),
               
-              // Winner overlay - show during showResult phase (game continues even if players disconnect)
-              if (wsService.getGamePhase() == GamePhase.showResult)
+              // Winner overlay - show when round finished (game continues even if players disconnect)
+              if (wsService.serverGameState?['phase'] == 'finished')
                 _buildWinnerOverlay(wsService),
             ],
           ),
@@ -249,56 +234,50 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   }
 
   Widget _buildTopBar(WebSocketService wsService) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.black.withOpacity(0.3), Colors.transparent],
-        ),
-      ),
-      child: SafeArea(
+    final gameState = wsService.serverGameState;
+    final roundNumber = gameState?['roundNumber'] ?? 0;
+    final phase = gameState?['phase'] ?? 'betting';
+    final bettingTimeLeft = wsService.getBettingTimeLeft();
+    
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             // Back button
             IconButton(
               onPressed: () {
-                _showLeaveConfirmation(wsService);
+                _showLeaveConfirmation();
               },
               icon: const Icon(Icons.arrow_back, color: Colors.white),
             ),
             
-            // Room info
-            Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    'Room: ${wsService.roomId ?? "Unknown"}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    '${wsService.players.length} players connected',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Spacer to push timer to the right
+            const Spacer(),
             
-            // Host controls
-            if (wsService.isHost() && wsService.getGamePhase() == GamePhase.waiting)
-              ElevatedButton(
-                onPressed: () => wsService.startGame(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
+            // Betting timer (only show during betting phase)
+            if (phase == 'betting')
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: bettingTimeLeft <= 3 ? Colors.red : Colors.orange,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text('START GAME'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.timer, color: Colors.white, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${bettingTimeLeft}s',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
           ],
         ),
@@ -310,7 +289,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final gameState = wsService.serverGameState;
     
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
       child: Column(
         children: [
           // Game stats and timer
@@ -324,19 +303,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
               children: [
                 // Andar pile
                 Expanded(
-                  child: _buildCardPile(
-                    'ANDAR',
-                    _getCardsFromGameState(gameState?['andarCards']),
-                    Colors.blue.shade700,
-                    gameState?['winningSide'] == 'andar',
-                    _getTotalBetForSide(wsService, 'andar'),
+                  child: AnimatedCardDealer(
+                    title: 'ANDAR',
+                    cards: _getCardsFromGameState(gameState?['andarCards']),
+                    titleColor: Colors.blue.shade700,
+                    isWinner: gameState?['winningSide'] == 'andar',
+                    totalBets: _getTotalBetForSide(wsService, 'andar'),
+                    gamePhase: gameState?['phase'] ?? 'betting',
+                    gameState: gameState,
+                    wsService: wsService,
                   ),
                 ),
                 
-                // Joker card in center
+                // Center Joker display
                 Container(
-                  width: 80,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  width: 120,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -345,7 +327,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                         'JOKER',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -353,14 +335,15 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                       if (gameState?['jokerCard'] != null)
                         CardWidget(
                           card: _convertToPlayingCard(gameState!['jokerCard']),
-                          width: 70,
-                          height: 100,
-                          showAnimation: true,
+                          width: 100,
+                          height: 150,
+                          showAnimation: false,
+                          isJoker: true,
                         )
                       else
                         Container(
-                          width: 70,
-                          height: 100,
+                          width: 100,
+                          height: 150,
                           decoration: BoxDecoration(
                             color: Colors.grey.shade300,
                             borderRadius: BorderRadius.circular(8),
@@ -374,20 +357,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                 
                 // Bahar pile
                 Expanded(
-                  child: _buildCardPile(
-                    'BAHAR',
-                    _getCardsFromGameState(gameState?['baharCards']),
-                    Colors.red.shade700,
-                    gameState?['winningSide'] == 'bahar',
-                    _getTotalBetForSide(wsService, 'bahar'),
+                  child: AnimatedCardDealer(
+                    title: 'BAHAR',
+                    cards: _getCardsFromGameState(gameState?['baharCards']),
+                    titleColor: Colors.yellow.shade700,
+                    isWinner: gameState?['winningSide'] == 'bahar',
+                    totalBets: _getTotalBetForSide(wsService, 'bahar'),
+                    gamePhase: gameState?['phase'] ?? 'betting',
+                    gameState: gameState,
+                    wsService: wsService,
                   ),
                 ),
               ],
             ),
           ),
           
-          // Players list
-          _buildPlayersSection(wsService),
+
         ],
       ),
     );
@@ -395,41 +380,39 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
   Widget _buildGameStats(WebSocketService wsService) {
     final gameState = wsService.serverGameState;
-    final phase = wsService.getGamePhase();
+    final phase = gameState?['phase'] ?? 'betting';
+    final bettingTimeLeft = wsService.getBettingTimeLeft();
+    final roundNumber = gameState?['roundNumber'] ?? 0;
     
     String phaseText = 'Waiting...';
     Color phaseColor = Colors.grey;
     
     switch (phase) {
-      case GamePhase.waiting:
-        final connectedPlayerCount = wsService.getConnectedPlayerCount();
-        if (connectedPlayerCount < 2) {
-          phaseText = 'Waiting for more players to join (${connectedPlayerCount}/2)';
-        } else {
-          phaseText = wsService.isHost() ? 'Press START GAME' : 'Waiting for host';
-        }
-        phaseColor = Colors.orange;
+      case 'betting':
+        phaseText = 'Betting Time: ${bettingTimeLeft}s';
+        phaseColor = bettingTimeLeft <= 3 ? Colors.red : Colors.green;
         break;
-      case GamePhase.betting:
-        phaseText = 'Betting Time: ${_bettingTimeRemaining}s';
-        phaseColor = Colors.green;
-        break;
-      case GamePhase.readyToPlay:
-        phaseText = 'Starting...';
-        phaseColor = Colors.yellow;
-        break;
-      case GamePhase.dealing:
+      case 'dealing':
         phaseText = 'Cards Being Dealt...';
         phaseColor = Colors.blue;
         break;
-      case GamePhase.finished:
+      case 'matchFound':
+        final winningSide = gameState?['winningSide'];
+        phaseText = winningSide != null ? 'MATCH FOUND! ${winningSide.toUpperCase()} WINS!' : 'Match Found!';
+        phaseColor = Colors.yellow;
+        break;
+      case 'finished':
         phaseText = 'Round Finished';
         phaseColor = Colors.purple;
         break;
-      case GamePhase.showResult:
-        phaseText = 'Showing Results';
+      case 'showResult':
+        final winningSide = gameState?['winningSide'];
+        phaseText = winningSide != null ? '${winningSide.toUpperCase()} WINS!' : 'Round Complete';
         phaseColor = Colors.orange;
         break;
+      default:
+        phaseText = 'Round $roundNumber - Join anytime!';
+        phaseColor = Colors.orange;
     }
     
     return Container(
@@ -451,128 +434,111 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     );
   }
 
-  Widget _buildCardPile(String title, List<PlayingCard> cards, Color titleColor, bool isWinner, int totalBets) {
-    return Column(
-      children: [
-        // Title and bet total
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: titleColor.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isWinner ? Colors.yellow : titleColor,
-              width: isWinner ? 3 : 1,
+
+
+
+
+  Widget _buildDealerPosition(String gamePhase) {
+    final isDealing = gamePhase == 'dealing' || gamePhase == 'matchFound';
+    
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isDealing 
+            ? Colors.green.withOpacity(0.3)
+            : Colors.grey.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDealing ? Colors.green : Colors.grey,
+          width: 2,
+        ),
+        boxShadow: isDealing ? [
+          BoxShadow(
+            color: Colors.green.withOpacity(0.3),
+            blurRadius: 8,
+            spreadRadius: 2,
+          ),
+        ] : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Dealer icon
+          Icon(
+            Icons.person,
+            color: isDealing ? Colors.green : Colors.grey,
+            size: 24,
+          ),
+          const SizedBox(height: 4),
+          
+          // Dealer label
+          Text(
+            'DEALER',
+            style: TextStyle(
+              color: isDealing ? Colors.green : Colors.grey,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          child: Column(
+          
+          // Card deck indicator
+          const SizedBox(height: 6),
+          Stack(
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: isWinner ? Colors.yellow : Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (totalBets > 0)
-                Text(
-                  'Total Bets: ₹$totalBets',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
+              // Back cards to show deck thickness
+              Positioned(
+                top: -2,
+                left: -1,
+                child: Container(
+                  width: 35,
+                  height: 25,
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade700,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
                 ),
+              ),
+              // Top card
+              Container(
+                width: 35,
+                height: 25,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.indigo.shade800, Colors.blue.shade900],
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.5),
+                    width: 1,
+                  ),
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.casino_outlined,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
-        
-        const SizedBox(height: 16),
-        
-        // Cards
-        Expanded(
-          child: SingleChildScrollView(
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              alignment: WrapAlignment.center,
-              children: cards.map<Widget>((card) {
-                return CardWidget(
-                  card: card,
-                  width: 50,
-                  height: 75,
-                  showAnimation: true,
-                );
-              }).toList(),
+          
+          // Status text
+          const SizedBox(height: 4),
+          Text(
+            isDealing ? 'DEALING' : 'READY',
+            style: TextStyle(
+              color: isDealing ? Colors.green : Colors.grey,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlayersSection(WebSocketService wsService) {
-    return Container(
-      height: 80,
-      margin: const EdgeInsets.only(top: 16),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: wsService.players.length,
-        itemBuilder: (context, index) {
-          final player = wsService.players[index];
-          final isCurrentPlayer = player['id'] == wsService.playerId;
-          final currentBet = player['currentBet'];
-          
-          return Container(
-            width: 120,
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isCurrentPlayer ? Colors.blue.withOpacity(0.3) : Colors.black.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isCurrentPlayer ? Colors.blue : Colors.white30,
-                width: 2,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.person,
-                      color: isCurrentPlayer ? Colors.blue : Colors.white,
-                      size: 16,
-                    ),
-                    if (player['isHost'] == true)
-                      const Icon(Icons.star, color: Colors.yellow, size: 16),
-                    Expanded(
-                      child: Text(
-                        player['name'] ?? 'Unknown',
-                        style: TextStyle(
-                          color: isCurrentPlayer ? Colors.blue : Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  '₹${player['balance'] ?? 0}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 10),
-                ),
-                if (currentBet != null)
-                  Text(
-                    '${currentBet['side'].toUpperCase()}: ₹${currentBet['amount']}',
-                    style: const TextStyle(color: Colors.green, fontSize: 10),
-                  ),
-              ],
-            ),
-          );
-        },
+        ],
       ),
     );
   }
@@ -580,7 +546,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   Widget _buildMultiplayerBettingPanel(WebSocketService wsService) {
     return MultiplayerBettingPanel(
       wsService: wsService,
-      bettingTimeRemaining: _bettingTimeRemaining,
+      bettingTimeRemaining: wsService.getBettingTimeLeft(),
     );
   }
 
@@ -594,89 +560,392 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final currentPlayer = wsService.getCurrentPlayer();
     final playerName = currentPlayer?['name'] ?? 'You';
     final currentBalance = wsService.getPlayerBalance();
-    // Find this round's bet
+    
+    // Calculate detailed betting information
     final bets = gameState?['bets'] as List<dynamic>? ?? [];
-    final myBetEntry = bets.firstWhere(
-        (b) => b['playerId'] == wsService.playerId,
-        orElse: () => null);
-    final mySide = myBetEntry != null ? (myBetEntry['side'] as String).toUpperCase() : 'N/A';
-    final myBet = myBetEntry != null ? (myBetEntry['amount'] as int) : 0;
-    // Compute net earned (could be negative)
-    final netEarned = currentBalance - _previousBalance;
-    final didWin = winningSide == myBetEntry?['side'];
+    final myBets = bets.where((b) => b['playerId'] == wsService.playerId).toList();
+    
+    // Calculate separate bets for Andar and Bahar
+    int andarBetAmount = 0;
+    int baharBetAmount = 0;
+    int totalBetAmount = 0;
+    int winningBetAmount = 0;
+    int losingBetAmount = 0;
+    int netGain = 0;
+    
+    for (final bet in myBets) {
+      final side = bet['side'] as String;
+      final amount = bet['amount'] as int;
+      totalBetAmount += amount;
+      
+      if (side == 'andar') {
+        andarBetAmount += amount;
+      } else {
+        baharBetAmount += amount;
+      }
+      
+      if (side == winningSide) {
+        winningBetAmount += amount;
+        // Simple 2x payout: bet ₹250 → get ₹500
+        final totalPayout = amount * 2;
+        netGain += totalPayout - amount; // Net gain = payout - original bet
+      } else {
+        losingBetAmount += amount;
+      }
+    }
+    
+    // Calculate total payout: 2x the winning bet amount
+    final totalPayout = winningBetAmount * 2;
+    
+    final didWin = winningBetAmount > 0;
+    final mainBetSide = andarBetAmount > baharBetAmount ? 'ANDAR' : 
+                       baharBetAmount > andarBetAmount ? 'BAHAR' : 
+                                               myBets.isNotEmpty ? (myBets.first['side'] as String).toUpperCase() : 'N/A';
+
+    return _buildGameResultDialog(playerName, didWin, andarBetAmount, baharBetAmount, totalBetAmount, netGain, losingBetAmount, totalPayout, currentBalance);
+  }
+
+  Widget _buildGameResultDialog(String playerName, bool didWin, int andarBetAmount, int baharBetAmount, int totalBetAmount, int netGain, int losingBetAmount, int totalPayout, int currentBalance) {
+    final winnerColor = didWin == true ? Colors.green : Colors.red;
+    final winnerText = didWin == true ? '🎉 YOU WIN! 🎉' : '😔 YOU LOSE';
 
     return Container(
-      color: Colors.black.withOpacity(0.7),
+      color: Colors.black.withOpacity(0.8),
       child: Center(
         child: Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 8,
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+          margin: const EdgeInsets.symmetric(horizontal: 120, vertical: 80),
+          child: Container(
+            width: 400,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.grey.shade900,
+                  Colors.black,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(Icons.celebration, size: 48, color: winnerColor),
+                // Centered Header with Result
+                Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: winnerColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: winnerColor.withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        didWin ? Icons.celebration : Icons.sentiment_dissatisfied,
+                        size: 36,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      didWin == true ? '🎉 YOU WIN! 🎉' : '😔 YOU LOSE',
+                      style: TextStyle(
+                        color: didWin == true ? Colors.greenAccent : Colors.redAccent,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black,
+                            offset: const Offset(1, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      winnerText,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black,
+                            offset: const Offset(1, 1),
+                            blurRadius: 1,
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      playerName,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
-                // Show result for current player first (main message)
-                Text(
-                  didWin == true ? 'You Win!' : 'You Lose',
-                  style: TextStyle(
-                    color: didWin == true ? Colors.green : Colors.red,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                
+                // Compact Betting & Results Section
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      // Betting Summary Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(didWin ? Icons.trending_up : Icons.trending_down, 
+                               color: didWin ? Colors.greenAccent : Colors.redAccent, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Round Summary',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black,
+                                  offset: const Offset(1, 1),
+                                  blurRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      // Total Bet Amount
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.orange.shade600, Colors.orange.shade800],
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade400),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.account_balance_wallet, color: Colors.white, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'My Total Bet: ₹$totalBetAmount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black,
+                                    offset: Offset(1, 1),
+                                    blurRadius: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      
+                      // Bets in compact rows
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue.withOpacity(0.6)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.arrow_back, color: Colors.lightBlueAccent, size: 16),
+                                  const SizedBox(width: 6),
+                                  const Text('ANDAR:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  const Spacer(),
+                                  Text('₹$andarBetAmount', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.withOpacity(0.6)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.arrow_forward, color: Colors.redAccent, size: 16),
+                                  const SizedBox(width: 6),
+                                  const Text('BAHAR:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  const Spacer(),
+                                  Text('₹$baharBetAmount', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      
+                      // Result Summary
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: didWin 
+                              ? [Colors.green.shade600, Colors.green.shade800]
+                              : [Colors.red.shade600, Colors.red.shade800],
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: didWin ? Colors.green.shade400 : Colors.red.shade400,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(didWin ? Icons.add_circle : Icons.remove_circle, 
+                                 color: Colors.white, size: 22),
+                            const SizedBox(width: 10),
+                                                        Text(
+                              didWin ? 'Total Won: ₹$totalPayout' : 'Lost: -₹$losingBetAmount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black,
+                                    offset: Offset(1, 1),
+                                    blurRadius: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  winnerText,
-                  style: TextStyle(
-                    color: winnerColor,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
+                const SizedBox(height: 12),
+                
+                // Balance Section
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade600, Colors.blue.shade800],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade400),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.account_balance_wallet, color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Balance:',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black,
+                              offset: Offset(1, 1),
+                              blurRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '₹$currentBalance',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black,
+                              offset: Offset(1, 1),
+                              blurRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                
                 const SizedBox(height: 16),
-                Divider(color: winnerColor.withOpacity(0.5)),
-                ListTile(
-                  leading: const Icon(Icons.person),
-                  title: const Text('Name'),
-                  subtitle: Text(playerName),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.swap_horiz),
-                  title: const Text('Choice'),
-                  subtitle: Text(mySide),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.attach_money),
-                  title: const Text('Bet Amount'),
-                  subtitle: Text('₹$myBet'),
-                ),
-                ListTile(
-                  leading: Icon(
-                    didWin == true ? Icons.thumb_up : Icons.thumb_down,
-                    color: didWin == true ? Colors.green : Colors.red,
+                
+                // Continue Button (moved down)
+                Center(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                      elevation: 4,
+                      shadowColor: Colors.green.shade800,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text(
+                      'Continue',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black,
+                            offset: Offset(1, 1),
+                            blurRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  title: const Text('Result'),
-                  subtitle: Text(didWin == true ? 'Won' : 'Lost'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.monetization_on),
-                  title: Text(didWin == true ? 'You Earned' : 'You Lost'),
-                  subtitle: Text('₹${didWin == true ? netEarned : myBet}'),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: winnerColor,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  ),
-                  child: const Text('OK', style: TextStyle(color: Colors.white, fontSize: 16)),
                 ),
               ],
             ),
@@ -686,44 +955,155 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     );
   }
 
-  Widget _buildDealerSection(WebSocketService wsService) {
-    final phase = wsService.getGamePhase();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedBuilder(
-          animation: _dealerAnimationController,
-          builder: (context, child) {
-            return Transform.translate(
-              offset: Offset(
-                _dealerAnimationController.value * (_throwToAndar ? -15 : 15),
-                -_dealerAnimationController.value * 10,
-              ),
-              child: CircleAvatar(
-                radius: 30,
-                backgroundColor: Colors.brown.shade700,
-                child: Text('🎩', style: const TextStyle(fontSize: 24)),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'DEALER',
-          style: TextStyle(color: Colors.white.withOpacity(0.8)),
-        ),
-        if (phase == GamePhase.dealing)
-          Text('Dealing...', style: TextStyle(color: Colors.yellow.withOpacity(0.8), fontSize: 12)),
-      ],
+  Widget _buildPlayerPanel(WebSocketService wsService) {
+    final players = wsService.players;
+    final currentPlayerId = wsService.playerId;
+    
+    return Container(
+      width: 280,
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        border: Border(right: BorderSide(color: Colors.white.withOpacity(0.2))),
+      ),
+      child: Column(
+        children: [
+          // Panel Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.2))),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.people, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Players (${players.length})',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Players List
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: players.length,
+              itemBuilder: (context, index) {
+                final player = players[index];
+                final isCurrentPlayer = player['id'] == currentPlayerId;
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isCurrentPlayer 
+                      ? Colors.blue.withOpacity(0.3)
+                      : Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: isCurrentPlayer
+                      ? Border.all(color: Colors.blue, width: 2)
+                      : null,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Player name and balance
+                      Row(
+                        children: [
+                          Icon(
+                            isCurrentPlayer ? Icons.person : Icons.person_outline,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              player['name'] ?? 'Unknown',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: isCurrentPlayer ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      
+                      // Balance
+                      Text(
+                        'Balance: ₹${player['balance'] ?? 0}',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      
+                      // Round bets
+                      Row(
+                        children: [
+                          // Andar bet
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Andar: ₹${player['roundBets']?['andar'] ?? 0}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          
+                          // Bahar bet
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.yellow.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Bahar: ₹${player['roundBets']?['bahar'] ?? 0}',
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  void _showLeaveConfirmation(WebSocketService wsService) {
+  void _showLeaveConfirmation() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Leave Room'),
-        content: const Text('Are you sure you want to leave the room?'),
+        title: const Text('Leave Game'),
+        content: const Text('Are you sure you want to leave the multiplayer game?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -732,7 +1112,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
           TextButton(
             onPressed: () {
               Navigator.pop(context); // Close dialog
-              wsService.leaveRoom();
+              
+              // Properly disconnect from WebSocket server
+              final wsService = Provider.of<WebSocketService>(context, listen: false);
+              wsService.disconnect();
+              
+              Navigator.pop(context); // Go back to main menu
             },
             child: const Text('Leave'),
           ),
@@ -817,12 +1202,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     return total;
   }
 
-  bool _didCurrentPlayerWin(WebSocketService wsService) {
-    final currentBet = wsService.getCurrentBet();
+  int _getPlayerBetCount(WebSocketService wsService, String side) {
     final gameState = wsService.serverGameState;
+    if (gameState == null || gameState['bets'] == null) return 0;
     
-    if (currentBet == null || gameState == null) return false;
-    
-    return currentBet['side'] == gameState['winningSide'];
+    Set<String> uniquePlayers = {};
+    for (final bet in gameState['bets']) {
+      if (bet['side'] == side) {
+        uniquePlayers.add(bet['playerId'] as String);
+      }
+    }
+    return uniquePlayers.length;
   }
 } 

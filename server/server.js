@@ -17,16 +17,16 @@ app.get('*', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Game rooms storage
-const rooms = new Map();
+// Global game room - single room for all players
+let globalRoom = null;
 const playerConnections = new Map();
 
 // Game phases
 const GAME_PHASES = {
-  WAITING: 'waiting',
   BETTING: 'betting',
-  READY_TO_PLAY: 'readyToPlay',
+  WAITING_FOR_PLAYERS: 'waitingForPlayers', // New phase when no bets placed
   DEALING: 'dealing',
+  MATCH_FOUND: 'matchFound', // New phase for dramatic pause
   FINISHED: 'finished',
   SHOW_RESULT: 'showResult'
 };
@@ -37,13 +37,12 @@ const BET_SIDES = {
   BAHAR: 'bahar'
 };
 
-class GameRoom {
-  constructor(roomId, hostId, hostName) {
-    this.roomId = roomId;
-    this.hostId = hostId;
+class GlobalGameRoom {
+  constructor() {
+    this.roomId = 'global';
     this.players = new Map();
     this.gameState = {
-      phase: GAME_PHASES.WAITING,
+      phase: GAME_PHASES.BETTING,
       jokerCard: null,
       andarCards: [],
       baharCards: [],
@@ -53,74 +52,47 @@ class GameRoom {
       totalCardsDealt: 0,
       bettingTimer: null,
       dealingTimer: null,
-      roundNumber: 0
+      roundNumber: 0,
+      bettingTimeLeft: 10
     };
     
-    this.hasGameEverStarted = false; // Track if game has been manually started by host
-    
-    // Add host as first player
-    this.addPlayer(hostId, hostName, true);
+    // Start continuous rounds immediately
+    this.startContinuousRounds();
   }
 
-  addPlayer(playerId, playerName, isHost = false) {
-    if (this.players.size >= 6) { // Max 6 players
-      return false;
-    }
-
+  addPlayer(playerId, playerName, shouldBroadcast = false) {
+    console.log(`Adding player ${playerName} (${playerId}) to global room`);
+    
     this.players.set(playerId, {
       id: playerId,
       name: playerName,
-      balance: 5000,
-      isHost: isHost,
-      isReady: false,
-      currentBet: null,
-      isConnected: true
+      balance: 1000,
+      isConnected: true,
+      roundBets: { andar: 0, bahar: 0 } // Current round bets for display
     });
 
-    // Only auto-start if the game has been started before (for new rounds), not for initial game
-    if (this.gameState.phase === GAME_PHASES.WAITING && this.getConnectedPlayerCount() >= 2 && this.hasGameEverStarted) {
-      console.log(`Room ${this.roomId}: Enough connected players joined for new round (${this.getConnectedPlayerCount()}/2), auto-starting`);
-      // Start game after a short delay to let UI update
-      setTimeout(async () => {
-        const started = await this.startGame();
-        if (started) {
-          this.broadcastGameState();
-        }
-      }, 2000);
+    if (shouldBroadcast) {
+      this.broadcastGameState();
     }
-
     return true;
   }
 
   removePlayer(playerId) {
     const player = this.players.get(playerId);
     if (player) {
+      console.log(`Removing player ${player.name} (${playerId}) from global room`);
       this.players.delete(playerId);
-      
-      // If host leaves, assign new host
-      if (player.isHost && this.players.size > 0) {
-        const newHost = this.players.values().next().value;
-        newHost.isHost = true;
-        this.hostId = newHost.id;
-      }
+      this.broadcastGameState();
     }
-    
-    return this.players.size === 0; // Return true if room is empty
   }
 
-  async startGame() {
-    // First, ping all players to verify connections
-    console.log(`Room ${this.roomId}: Starting game - first pinging all players`);
-    const verifiedPlayerCount = await this.pingAllPlayers();
-    
-    if (verifiedPlayerCount < 2) {
-      console.log(`Room ${this.roomId}: Not enough verified players (${verifiedPlayerCount}/2) after ping test`);
-      this.gameState.phase = GAME_PHASES.WAITING;
-      this.broadcastGameState();
-      return false;
-    }
-    
-    console.log(`Room ${this.roomId}: ${verifiedPlayerCount} players verified, starting game`);
+  startContinuousRounds() {
+    console.log('Starting continuous rounds in global room');
+    this.startNewRound();
+  }
+
+  startNewRound() {
+    console.log(`Starting round ${this.gameState.roundNumber + 1}`);
     
     this.gameState.phase = GAME_PHASES.BETTING;
     this.gameState.roundNumber++;
@@ -130,16 +102,23 @@ class GameRoom {
     this.gameState.andarCards = [];
     this.gameState.baharCards = [];
     this.gameState.totalCardsDealt = 0;
+    this.gameState.bettingTimeLeft = 10;
+    
+    // Reset player round bets (all players are connected since we remove disconnected ones)
+    this.players.forEach(player => {
+      player.roundBets = { andar: 0, bahar: 0 };
+    });
     
     // Create and shuffle deck
     this.createDeck();
     this.shuffleDeck();
     
-    // Start 10-second betting timer
+    // Start 10-second betting timer with countdown
     this.startBettingTimer();
-    
-    return true;
+    this.broadcastGameState();
   }
+
+
 
   createDeck() {
     this.gameState.deck = [];
@@ -170,36 +149,88 @@ class GameRoom {
       clearTimeout(this.gameState.bettingTimer);
     }
 
-    this.gameState.bettingTimer = setTimeout(async () => {
-      await this.endBettingPhase();
-    }, 10000); // 10 seconds for betting
+    // Countdown timer
+    const countdown = () => {
+      if (this.gameState.bettingTimeLeft > 0) {
+        this.gameState.bettingTimeLeft--;
+        this.broadcastGameState();
+        this.gameState.bettingTimer = setTimeout(countdown, 1000);
+      } else {
+        this.endBettingPhase();
+      }
+    };
+    
+    this.gameState.bettingTimer = setTimeout(countdown, 1000);
   }
 
-  async endBettingPhase() {
+  endBettingPhase() {
+    // CLEAR betting timer immediately
+    if (this.gameState.bettingTimer) {
+      clearTimeout(this.gameState.bettingTimer);
+      this.gameState.bettingTimer = null;
+    }
+    
+    console.log(`Round ${this.gameState.roundNumber}: Betting ended. ${this.gameState.bets.length} bets placed`);
+    
+    // Calculate and display total bets amount
+    if (this.gameState.bets.length > 0) {
+      const totalBetsAmount = this.gameState.bets.reduce((sum, bet) => sum + bet.amount, 0);
+      console.log(`Total Player's Bet:- ₹${totalBetsAmount}`);
+    }
+    
     if (this.gameState.bets.length === 0) {
-      // No bets placed, restart game with ping verification
-      await this.startGame();
+      // No bets placed, wait longer before starting new round (proper multiplayer behavior)
+      console.log('No bets placed this round. Waiting 15 seconds before next round...');
+      this.gameState.phase = GAME_PHASES.WAITING_FOR_PLAYERS;
+      this.gameState.bettingTimeLeft = 15;
+      this.broadcastGameState();
+      
+      // Start countdown for next round - store the timer ID
+      const waitCountdown = () => {
+        if (this.gameState.phase === GAME_PHASES.WAITING_FOR_PLAYERS && this.gameState.bettingTimeLeft > 0) {
+          this.gameState.bettingTimeLeft--;
+          this.broadcastGameState();
+          this.gameState.bettingTimer = setTimeout(waitCountdown, 1000);
+        } else if (this.gameState.bettingTimeLeft <= 0) {
+          this.startNewRound();
+        }
+      };
+      this.gameState.bettingTimer = setTimeout(waitCountdown, 1000);
       return;
     }
 
-    this.gameState.phase = GAME_PHASES.READY_TO_PLAY;
-    this.broadcastGameState();
-    
-    // Start dealing after 1 second
+    // Start dealing immediately if we have bets
+    console.log('🎲 Starting card dealing phase...');
+    this.gameState.bettingTimeLeft = 0; // Clear timer display
     setTimeout(() => {
       this.startDealing();
-    }, 1000);
+    }, 500);
   }
 
   placeBet(playerId, side, amount) {
-    if (this.gameState.phase !== GAME_PHASES.BETTING) return false;
+    // Allow betting during both betting phase and waiting for players phase
+    if (this.gameState.phase !== GAME_PHASES.BETTING && 
+        this.gameState.phase !== GAME_PHASES.WAITING_FOR_PLAYERS) return false;
     
     const player = this.players.get(playerId);
     if (!player || player.balance < amount) return false;
 
-    // Allow multiple bets - don't remove existing bets
-    // Just add new bet and deduct balance
+    // If we were waiting for players, restart betting phase with shorter timer
+    if (this.gameState.phase === GAME_PHASES.WAITING_FOR_PLAYERS) {
+      console.log('Player placed bet during waiting phase. Starting short betting phase...');
+      // Clear any waiting timer first
+      if (this.gameState.bettingTimer) {
+        clearTimeout(this.gameState.bettingTimer);
+        this.gameState.bettingTimer = null;
+      }
+      this.gameState.phase = GAME_PHASES.BETTING;
+      this.gameState.bettingTimeLeft = 3; // Shorter 3-second timer to allow for additional bets
+      this.startBettingTimer();
+    }
+
+    // Deduct balance and add bet
     player.balance -= amount;
+    player.roundBets[side] += amount;
     
     this.gameState.bets.push({
       playerId,
@@ -208,23 +239,33 @@ class GameRoom {
       amount
     });
 
+    console.log(`Player ${player.name} bet ₹${amount} on ${side}`);
+    this.broadcastGameState();
     return true;
   }
 
   startDealing() {
     if (this.gameState.deck.length === 0) return;
     
+    // CLEAR ALL TIMERS when starting to deal
+    if (this.gameState.bettingTimer) {
+      clearTimeout(this.gameState.bettingTimer);
+      this.gameState.bettingTimer = null;
+    }
+    
     // Reveal joker
     this.gameState.jokerCard = this.gameState.deck.shift();
     this.gameState.jokerCard.isVisible = true;
     this.gameState.phase = GAME_PHASES.DEALING;
+    this.gameState.bettingTimeLeft = 0; // Reset timer display
     
+    console.log(`Dealing started. Joker: ${this.gameState.jokerCard.rank} of ${this.gameState.jokerCard.suit}`);
     this.broadcastGameState();
     
-    // Start dealing cards
+    // Start dealing cards after brief delay for joker reveal
     setTimeout(() => {
       this.dealNextCard();
-    }, 700);
+    }, 300);
   }
 
   dealNextCard() {
@@ -233,13 +274,11 @@ class GameRoom {
     const nextCard = this.gameState.deck.shift();
     nextCard.isVisible = true;
     
-    // Determine which side to deal to
+    // Determine which side to deal to (alternating, starting with joker color side)
     let dealToSide;
     if (this.gameState.totalCardsDealt === 0) {
-      // First card goes to side based on joker color
       dealToSide = this.gameState.jokerCard.isBlack ? BET_SIDES.ANDAR : BET_SIDES.BAHAR;
     } else {
-      // Alternate sides
       dealToSide = (this.gameState.andarCards.length <= this.gameState.baharCards.length) 
         ? BET_SIDES.ANDAR : BET_SIDES.BAHAR;
     }
@@ -253,14 +292,25 @@ class GameRoom {
     
     this.gameState.totalCardsDealt++;
     
-    // Check for winning condition
+    // Check for match
     if (nextCard.rank === this.gameState.jokerCard.rank) {
       this.gameState.winningSide = dealToSide;
-      this.gameState.phase = GAME_PHASES.FINISHED;
-      this.finishRound();
+      this.gameState.phase = GAME_PHASES.MATCH_FOUND; // Set special phase for highlighting
+      
+      console.log(`🎯 MATCH FOUND! ${nextCard.rank} matches joker ${this.gameState.jokerCard.rank}. Winner: ${dealToSide.toUpperCase()}`);
+      console.log(`🎨 Setting phase to 'matchFound' and broadcasting for green highlighting...`);
+      
+      // Broadcast state to show the matching card highlighted
+      this.broadcastGameState();
+      
+      console.log(`⏰ Brief pause to show winning card...`);
+      // Extended pause to show the winning card before declaring winner
+      setTimeout(() => {
+        this.finishRound();
+      }, 3000);
     } else {
       this.broadcastGameState();
-      // Continue dealing
+      // Continue dealing after short delay for animation
       setTimeout(() => {
         this.dealNextCard();
       }, 400);
@@ -268,395 +318,185 @@ class GameRoom {
   }
 
   finishRound() {
-    this.gameState.phase = GAME_PHASES.SHOW_RESULT;
+    // CLEAR ALL TIMERS when finishing round
+    if (this.gameState.bettingTimer) {
+      clearTimeout(this.gameState.bettingTimer);
+      this.gameState.bettingTimer = null;
+    }
     
-    // Calculate and apply payouts
+    this.gameState.phase = GAME_PHASES.FINISHED;
+    this.gameState.bettingTimeLeft = 0; // Clear timer display
+    console.log(`Round ${this.gameState.roundNumber} finished. Winner: ${this.gameState.winningSide}`);
+    
+    // Calculate and distribute payouts
     this.calculatePayouts();
     
     this.broadcastGameState();
     
-    // Start new round after 5 seconds, but only if minimum connected players
-    setTimeout(async () => {
-      // Check if we have minimum connected players before starting new round
-      const connectedPlayers = this.getConnectedPlayerCount();
-      if (connectedPlayers >= 2) {
-        // Initialize next round and notify clients (with ping verification)
-        const started = await this.startGame();
-        if (started) {
-          this.broadcastGameState();
-        } else {
-          // Failed to start (ping verification failed), go to waiting
-          this.gameState.phase = GAME_PHASES.WAITING;
-          this.broadcastGameState();
-          console.log(`Room ${this.roomId}: Failed to start new round (ping verification failed), waiting for more players`);
-        }
-      } else {
-        // Not enough connected players, go back to waiting phase
-        this.gameState.phase = GAME_PHASES.WAITING;
-        // Clear game state data for clean waiting state
-        this.gameState.jokerCard = null;
-        this.gameState.andarCards = [];
-        this.gameState.baharCards = [];
-        this.gameState.bets = [];
-        this.gameState.winningSide = null;
-        this.gameState.totalCardsDealt = 0;
-        this.broadcastGameState();
-        console.log(`Room ${this.roomId}: Not enough connected players (${connectedPlayers}/2), waiting for more players to join`);
-      }
-    }, 5000);
+    console.log(`🏆 Starting next round after brief delay...`);
+    
+    // Start next round after brief delay for result display
+    setTimeout(() => {
+      this.startNewRound();
+    }, 4000);  // Extended delay for longer winner screen
   }
 
   calculatePayouts() {
     if (!this.gameState.winningSide) return;
     
-    for (const bet of this.gameState.bets) {
-      if (bet.side === this.gameState.winningSide) {
+    const winningSide = this.gameState.winningSide;
+    let totalPayout = 0;
+    
+    this.gameState.bets.forEach(bet => {
+      if (bet.side === winningSide) {
+        // Simple 2x payout: bet ₹250 → get ₹500
+        const winningAmount = bet.amount * 2;
+        
         const player = this.players.get(bet.playerId);
         if (player) {
-          // Andar: 0.9:1, Bahar: 1:1
-          const multiplier = bet.side === BET_SIDES.ANDAR ? 1.9 : 2.0;
-          const payout = Math.round(bet.amount * multiplier);
-          player.balance += payout;
+          player.balance += winningAmount; // Give them double their bet
+          totalPayout += winningAmount;
+          console.log(`Player ${player.name} won: ₹${bet.amount} bet → ₹${winningAmount} payout`);
         }
       }
-    }
+    });
     
-    // Clear current bets (no longer needed as we don't track individual currentBet)
-    // this.players.forEach(player => {
-    //   player.currentBet = null;
-    // });
+    console.log(`Total payout distributed: ₹${totalPayout}`);
   }
 
   broadcastGameState() {
-    // Create a clean copy of game state without timer references
+    // All players in the room are connected (since we remove disconnected ones)
+    const playersArray = Array.from(this.players.values()).map(player => ({
+      id: player.id,
+      name: player.name,
+      balance: player.balance,
+      isConnected: player.isConnected,
+      roundBets: player.roundBets
+    }));
+
+    // Create a clean game state without timer objects and deck for JSON serialization
     const cleanGameState = {
       phase: this.gameState.phase,
+      roundNumber: this.gameState.roundNumber,
       jokerCard: this.gameState.jokerCard,
       andarCards: this.gameState.andarCards,
       baharCards: this.gameState.baharCards,
-      deck: this.gameState.deck,
-      bets: this.gameState.bets,
-      winningSide: this.gameState.winningSide,
       totalCardsDealt: this.gameState.totalCardsDealt,
-      roundNumber: this.gameState.roundNumber
-      // Exclude bettingTimer and dealingTimer as they contain circular references
+      winningSide: this.gameState.winningSide,
+      bets: this.gameState.bets,
+      // Only include timer for betting and waiting phases
+      ...(this.gameState.phase === GAME_PHASES.BETTING || this.gameState.phase === GAME_PHASES.WAITING_FOR_PLAYERS ? 
+          { bettingTimeLeft: this.gameState.bettingTimeLeft } : {}),
+      // Exclude deck array as it's large and not needed by clients
     };
 
-    const gameData = {
+    const message = {
       type: 'gameState',
-      roomId: this.roomId,
       gameState: cleanGameState,
-      players: Array.from(this.players.values())
+      players: playersArray
     };
 
+    // Broadcast to all connected players
     this.players.forEach(player => {
-      const connection = playerConnections.get(player.id);
-      if (connection && connection.readyState === WebSocket.OPEN) {
-        connection.send(JSON.stringify(gameData));
+      const ws = playerConnections.get(player.id);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(message));
       }
     });
-  }
-
-  getConnectedPlayerCount() {
-    let connectedCount = 0;
-    for (const player of this.players.values()) {
-      if (player.isConnected) {
-        connectedCount++;
-      }
-    }
-    return connectedCount;
-  }
-
-  // Ping all players to verify connections
-  pingAllPlayers() {
-    return new Promise((resolve) => {
-      const pingId = Date.now().toString();
-      const pongResponses = new Set();
-      const expectedPlayers = Array.from(this.players.keys()).filter(
-        playerId => this.players.get(playerId).isConnected
-      );
-
-      console.log(`Room ${this.roomId}: Pinging ${expectedPlayers.length} players`);
-
-      // Send ping to all connected players
-      expectedPlayers.forEach(playerId => {
-        const connection = playerConnections.get(playerId);
-        if (connection && connection.readyState === WebSocket.OPEN) {
-          connection.send(JSON.stringify({
-            type: 'ping',
-            pingId: pingId,
-            roomId: this.roomId
-          }));
-        } else {
-          // Mark player as disconnected if connection is not open
-          const player = this.players.get(playerId);
-          if (player) {
-            player.isConnected = false;
-          }
-        }
-      });
-
-      // Wait for pong responses with timeout
-      const timeout = setTimeout(() => {
-        const respondedPlayers = pongResponses.size;
-        const verifiedPlayers = Array.from(pongResponses);
-        
-        // Mark non-responding players as disconnected
-        expectedPlayers.forEach(playerId => {
-          if (!pongResponses.has(playerId)) {
-            const player = this.players.get(playerId);
-            if (player) {
-              player.isConnected = false;
-              console.log(`Room ${this.roomId}: Player ${player.name} failed ping test, marked as disconnected`);
-            }
-          }
-        });
-
-        console.log(`Room ${this.roomId}: Ping test completed. ${respondedPlayers}/${expectedPlayers.length} players responded`);
-        resolve(respondedPlayers);
-      }, 3000); // 3 second timeout for ping responses
-
-      // Store ping data for this room
-      this.currentPing = {
-        pingId,
-        timeout,
-        pongResponses,
-        expectedCount: expectedPlayers.length,
-        resolve
-      };
-    });
-  }
-
-  // Handle pong response
-  handlePong(playerId, pingId) {
-    if (this.currentPing && this.currentPing.pingId === pingId) {
-      this.currentPing.pongResponses.add(playerId);
-      
-      // If all expected players responded, resolve early
-      if (this.currentPing.pongResponses.size >= this.currentPing.expectedCount) {
-        clearTimeout(this.currentPing.timeout);
-        const respondedPlayers = this.currentPing.pongResponses.size;
-        console.log(`Room ${this.roomId}: All players responded to ping (${respondedPlayers}/${this.currentPing.expectedCount})`);
-        this.currentPing.resolve(respondedPlayers);
-        this.currentPing = null;
-      }
-    }
-  }
-
-  getRoomInfo() {
-    return {
-      roomId: this.roomId,
-      hostId: this.hostId,
-      playerCount: this.players.size,
-      maxPlayers: 6,
-      gamePhase: this.gameState.phase,
-      players: Array.from(this.players.values())
-    };
   }
 }
 
-// WebSocket connection handler
+// Initialize global room
+globalRoom = new GlobalGameRoom();
+
+// WebSocket connection handling
 wss.on('connection', (ws) => {
-  console.log('New client connected');
+  console.log('New WebSocket connection');
   
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
       handleMessage(ws, data);
-    } catch (error) {
-      console.error('Error parsing message:', error);
-      ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+    } catch (e) {
+      console.error('Error parsing message:', e);
     }
   });
-  
+
   ws.on('close', () => {
-    console.log('Client disconnected');
     handleDisconnection(ws);
+  });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
   });
 });
 
 function handleMessage(ws, data) {
+  console.log(`Received message: ${data.type}`);
+  
   switch (data.type) {
-    case 'createRoom':
-      handleCreateRoom(ws, data);
-      break;
-    case 'joinRoom':
-      handleJoinRoom(ws, data);
-      break;
-    case 'leaveRoom':
-      handleLeaveRoom(ws, data);
-      break;
-    case 'startGame':
-      handleStartGame(ws, data);
+    case 'joinGlobal':
+      handleJoinGlobal(ws, data);
       break;
     case 'placeBet':
       handlePlaceBet(ws, data);
       break;
-    case 'getRooms':
-      handleGetRooms(ws);
-      break;
     case 'pong':
-      handlePong(ws, data);
+      // Handle pong responses if needed
       break;
     default:
-      ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
+      console.log(`Unknown message type: ${data.type}`);
   }
 }
 
-function handleCreateRoom(ws, data) {
-  const roomId = uuidv4().substring(0, 8).toUpperCase();
+function handleJoinGlobal(ws, data) {
+  const playerName = data.playerName || `Player${Date.now() % 1000}`;
   const playerId = uuidv4();
-  const playerName = data.playerName || 'Player';
   
-  const room = new GameRoom(roomId, playerId, playerName);
-  rooms.set(roomId, room);
+  // Create new player (always fresh since we remove players when they leave)
+  globalRoom.addPlayer(playerId, playerName, true);
+  console.log(`Player ${playerName} joined global room`);
+  
+  // Store connection
   playerConnections.set(playerId, ws);
   ws.playerId = playerId;
-  ws.roomId = roomId;
   
+  // Send join confirmation
   ws.send(JSON.stringify({
-    type: 'roomCreated',
-    roomId: roomId,
+    type: 'joinedGlobal',
     playerId: playerId,
-    roomInfo: room.getRoomInfo()
+    roomId: 'global'
   }));
-  
-  console.log(`Room ${roomId} created by ${playerName}`);
-}
-
-function handleJoinRoom(ws, data) {
-  const room = rooms.get(data.roomId);
-  if (!room) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
-    return;
-  }
-  
-  const playerId = uuidv4();
-  const playerName = data.playerName || 'Player';
-  
-  if (room.addPlayer(playerId, playerName)) {
-    playerConnections.set(playerId, ws);
-    ws.playerId = playerId;
-    ws.roomId = data.roomId;
-    
-    ws.send(JSON.stringify({
-      type: 'roomJoined',
-      roomId: data.roomId,
-      playerId: playerId,
-      roomInfo: room.getRoomInfo()
-    }));
-    
-    // Broadcast to all players in room
-    room.broadcastGameState();
-    
-    console.log(`${playerName} joined room ${data.roomId}`);
-  } else {
-    ws.send(JSON.stringify({ type: 'error', message: 'Room is full' }));
-  }
-}
-
-function handleLeaveRoom(ws, data) {
-  const room = rooms.get(data.roomId);
-  if (room && ws.playerId) {
-    const isEmpty = room.removePlayer(ws.playerId);
-    playerConnections.delete(ws.playerId);
-    
-    if (isEmpty) {
-      rooms.delete(data.roomId);
-      console.log(`Room ${data.roomId} deleted (empty)`);
-    } else {
-      room.broadcastGameState();
-    }
-    
-    ws.send(JSON.stringify({ type: 'leftRoom' }));
-  }
-}
-
-async function handleStartGame(ws, data) {
-  const room = rooms.get(data.roomId);
-  if (room && ws.playerId) {
-    const player = room.players.get(ws.playerId);
-    if (player && player.isHost) {
-      const started = await room.startGame();
-      if (started) {
-        room.hasGameEverStarted = true; // Mark that host has manually started the game
-        room.broadcastGameState();
-        console.log(`Game manually started by host in room ${data.roomId}`);
-      } else {
-        ws.send(JSON.stringify({ type: 'error', message: 'Need at least 2 verified players to start' }));
-      }
-    } else {
-      ws.send(JSON.stringify({ type: 'error', message: 'Only host can start the game' }));
-    }
-  }
 }
 
 function handlePlaceBet(ws, data) {
-  const room = rooms.get(data.roomId);
-  if (room && ws.playerId) {
-    if (room.placeBet(ws.playerId, data.side, data.amount)) {
-      room.broadcastGameState();
-    } else {
-      ws.send(JSON.stringify({ type: 'error', message: 'Cannot place bet' }));
-    }
-  }
-}
-
-function handleGetRooms(ws) {
-  const roomList = Array.from(rooms.values()).map(room => ({
-    roomId: room.roomId,
-    playerCount: room.players.size,
-    maxPlayers: 6,
-    gamePhase: room.gameState.phase
-  }));
+  if (!ws.playerId) return;
   
-  ws.send(JSON.stringify({
-    type: 'roomList',
-    rooms: roomList
-  }));
-}
-
-function handlePong(ws, data) {
-  const room = rooms.get(data.roomId);
-  if (room && ws.playerId) {
-    room.handlePong(ws.playerId, data.pingId);
-    console.log(`Room ${data.roomId}: Received pong from player ${ws.playerId}`);
+  const success = globalRoom.placeBet(ws.playerId, data.side, data.amount);
+  
+  if (!success) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Failed to place bet'
+    }));
   }
 }
 
 function handleDisconnection(ws) {
-  if (ws.playerId && ws.roomId) {
-    const room = rooms.get(ws.roomId);
-    if (room) {
-      const player = room.players.get(ws.playerId);
-      if (player) {
-        player.isConnected = false;
-        console.log(`Player ${player.name} disconnected from room ${ws.roomId}`);
-        
-        // Don't interrupt active games - only check player count when starting new rounds
-        // Just broadcast the updated player list, but don't stop ongoing games
-        console.log(`Player ${player.name} disconnected from room ${ws.roomId}`);
-        room.broadcastGameState();
-        
-        // Remove player after 10 seconds (reduced from 30)
-        setTimeout(() => {
-          if (room.players.has(ws.playerId) && !room.players.get(ws.playerId).isConnected) {
-            const isEmpty = room.removePlayer(ws.playerId);
-            if (isEmpty) {
-              rooms.delete(ws.roomId);
-              console.log(`Room ${ws.roomId} deleted (empty after disconnection)`);
-            } else {
-              room.broadcastGameState();
-            }
-          }
-        }, 10000);
-      }
+  if (ws.playerId) {
+    const player = globalRoom.players.get(ws.playerId);
+    if (player) {
+      console.log(`Player ${player.name} left the game - removing from room`);
+      // Completely remove player from the room
+      globalRoom.players.delete(ws.playerId);
+      globalRoom.broadcastGameState();
     }
     playerConnections.delete(ws.playerId);
   }
 }
 
-// Start HTTP + WebSocket server
+// Start server
 server.listen(PORT, () => {
-  console.log(`Andar Bahar server running on port ${PORT}`);
+  console.log(`Andar Bahar WebSocket Server running on port ${PORT}`);
+  console.log(`Global room initialized with continuous 10-second rounds`);
 }); 

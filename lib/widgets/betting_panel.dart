@@ -387,7 +387,7 @@ class _BettingPanelState extends State<BettingPanel> {
           child: _buildBetButton(
             'BAHAR',
             BetSide.bahar,
-            Colors.red.shade700,
+            Colors.yellow.shade700,
             canBet,
           ),
         ),
@@ -492,8 +492,8 @@ class _BettingPanelState extends State<BettingPanel> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.purple.shade600,
-                Colors.purple.shade700,
+                Colors.orange.shade600,
+                Colors.orange.shade700,
               ],
             ),
             borderRadius: BorderRadius.circular(20),

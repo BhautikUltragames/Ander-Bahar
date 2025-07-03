@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/websocket_service.dart';
-import '../models/game_state.dart';
 
 class MultiplayerBettingPanel extends StatefulWidget {
   final WebSocketService wsService;
@@ -22,10 +21,10 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final gamePhase = widget.wsService.getGamePhase();
+    final gameState = widget.wsService.serverGameState;
+    final gamePhase = gameState?['phase'] ?? 'betting';
     final playerBalance = widget.wsService.getPlayerBalance();
-    final currentBet = widget.wsService.getCurrentBet();
-    final canBet = gamePhase == GamePhase.betting;
+    final canBet = (gamePhase == 'betting' || gamePhase == 'waitingForPlayers') && widget.bettingTimeRemaining > 0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -54,11 +53,8 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
           _buildBalanceDisplay(playerBalance),
           const SizedBox(height: 16),
           
-          // Current Bets Display
-          _buildCurrentBetDisplay(currentBet ?? {}),
-          
-          // Game Phase Indicator
-          _buildGamePhaseIndicator(gamePhase),
+          // Current Round Bets Display
+          _buildCurrentBetDisplay(),
           const SizedBox(height: 16),
           
           // Chip Selection (only during betting phase)
@@ -96,8 +92,7 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
     );
   }
 
-  Widget _buildCurrentBetDisplay(Map<String, dynamic> bet) {
-    // Get all bets for current player
+  Widget _buildCurrentBetDisplay() {
     final gameState = widget.wsService.serverGameState;
     if (gameState == null) return Container();
     
@@ -105,32 +100,46 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
     final playerId = widget.wsService.playerId;
     if (playerId == null) return Container();
     
-    final myBets = allBets.where((b) {
-      try {
-        return b != null && b['playerId'] == playerId;
-      } catch (e) {
-        print('Error filtering bet: $e');
-        return false;
-      }
-    }).toList();
+    // Get current player's bets for this round
+    final myBets = allBets.where((bet) => bet['playerId'] == playerId).toList();
     
-    if (myBets.isEmpty) return Container();
-    
-    int totalAmount = 0;
-    try {
-      totalAmount = myBets.fold(0, (sum, bet) {
-        final amount = bet['amount'];
-        if (amount is int) {
-          return sum + amount;
-        } else if (amount is String) {
-          return sum + (int.tryParse(amount) ?? 0);
-        }
-        return sum;
-      });
-    } catch (e) {
-      print('Error calculating total amount: $e');
-      totalAmount = 0;
+    if (myBets.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.info_outline, color: Colors.white70, size: 16),
+            SizedBox(width: 8),
+            Text(
+              'No bets placed this round',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ],
+        ),
+      );
     }
+    
+    // Calculate totals for each side
+    int andarTotal = 0;
+    int baharTotal = 0;
+    
+    for (final bet in myBets) {
+      final side = bet['side'] as String;
+      final amount = bet['amount'] as int;
+      
+      if (side == 'andar') {
+        andarTotal += amount;
+      } else if (side == 'bahar') {
+        baharTotal += amount;
+      }
+    }
+    
+    final totalAmount = andarTotal + baharTotal;
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -148,7 +157,7 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
               const Icon(Icons.check_circle, color: Colors.green, size: 16),
               const SizedBox(width: 8),
               Text(
-                'Your Bets (Total: ₹$totalAmount)',
+                'Your Bets This Round (₹$totalAmount)',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -158,131 +167,98 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
             ],
           ),
           const SizedBox(height: 4),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 60), // Limit height to show ~3 bets
-            child: myBets.length > 3
-                ? Scrollbar(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: myBets.length,
-                      itemBuilder: (context, index) {
-                        final bet = myBets[index];
-                        String side = 'UNKNOWN';
-                        String amount = '0';
-                        
-                        try {
-                          side = (bet['side'] ?? 'UNKNOWN').toString().toUpperCase();
-                          final betAmount = bet['amount'];
-                          if (betAmount is int) {
-                            amount = betAmount.toString();
-                          } else if (betAmount is String) {
-                            amount = betAmount;
-                          }
-                        } catch (e) {
-                          print('Error displaying bet: $e');
-                        }
-                        
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
-                          child: Text(
-                            '• $side: ₹$amount',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: myBets.map((bet) {
-                      String side = 'UNKNOWN';
-                      String amount = '0';
-                      
-                      try {
-                        side = (bet['side'] ?? 'UNKNOWN').toString().toUpperCase();
-                        final betAmount = bet['amount'];
-                        if (betAmount is int) {
-                          amount = betAmount.toString();
-                        } else if (betAmount is String) {
-                          amount = betAmount;
-                        }
-                      } catch (e) {
-                        print('Error displaying bet: $e');
-                      }
-                      
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          '• $side: ₹$amount',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+          Row(
+            children: [
+              if (andarTotal > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(4),
                   ),
+                  child: Text(
+                    'Andar: ₹$andarTotal',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              if (andarTotal > 0 && baharTotal > 0) const SizedBox(width: 8),
+              if (baharTotal > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Bahar: ₹$baharTotal',
+                    style: const TextStyle(color: Colors.black, fontSize: 12),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildGamePhaseIndicator(GamePhase gamePhase) {
-    String phaseText;
-    Color phaseColor;
-    
+  Widget _buildGamePhaseIndicator(String gamePhase) {
+    String phaseText = 'Unknown Phase';
+    Color phaseColor = Colors.grey;
+    IconData phaseIcon = Icons.help;
+
     switch (gamePhase) {
-      case GamePhase.waiting:
-        final connectedPlayerCount = widget.wsService.getConnectedPlayerCount();
-        if (connectedPlayerCount < 2) {
-          phaseText = 'Waiting for more players (${connectedPlayerCount}/2)';
-        } else {
-          phaseText = widget.wsService.isHost() ? 'Press START GAME' : 'Waiting for host';
-        }
-        phaseColor = Colors.orange;
+      case 'betting':
+        phaseText = 'Betting Phase (${widget.bettingTimeRemaining}s left)';
+        phaseColor = widget.bettingTimeRemaining <= 3 ? Colors.red : Colors.green;
+        phaseIcon = Icons.timer;
         break;
-      case GamePhase.betting:
-        phaseText = 'Place Your Bets! (${widget.bettingTimeRemaining}s)';
-        phaseColor = Colors.green;
-        break;
-      case GamePhase.readyToPlay:
-        phaseText = 'Starting...';
-        phaseColor = Colors.yellow;
-        break;
-      case GamePhase.dealing:
+      case 'dealing':
         phaseText = 'Cards Being Dealt...';
         phaseColor = Colors.blue;
+        phaseIcon = Icons.style;
         break;
-      case GamePhase.finished:
+      case 'finished':
         phaseText = 'Round Finished';
         phaseColor = Colors.purple;
+        phaseIcon = Icons.check_circle;
         break;
-      case GamePhase.showResult:
+      case 'showResult':
         phaseText = 'Showing Results';
         phaseColor = Colors.orange;
+        phaseIcon = Icons.emoji_events;
+        break;
+      case 'waitingForPlayers':
+        phaseText = 'Waiting for Players (${widget.bettingTimeRemaining}s)';
+        phaseColor = Colors.amber;
+        phaseIcon = Icons.people_outline;
         break;
       default:
-        phaseText = 'Waiting...';
-        phaseColor = Colors.grey;
+        phaseText = 'Waiting for Next Round...';
+        phaseColor = Colors.orange;
+        phaseIcon = Icons.hourglass_empty;
     }
-    
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: phaseColor.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: phaseColor),
       ),
-      child: Text(
-        phaseText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(phaseIcon, color: phaseColor, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            phaseText,
+            style: TextStyle(
+              color: phaseColor,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -292,7 +268,7 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Select Chip Amount:',
+          'Select Bet Amount:',
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -300,106 +276,90 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
           ),
         ),
         const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: chipValues.map((value) {
-              final isSelected = selectedAmount == value;
-              final canAfford = value <= widget.wsService.getPlayerBalance();
-              
-              return GestureDetector(
-                onTap: canAfford ? () {
-                  setState(() {
-                    selectedAmount = value;
-                  });
-                } : null,
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isSelected 
-                        ? Colors.yellow.shade600 
-                        : canAfford 
-                            ? Colors.orange.shade600 
-                            : Colors.grey.shade600,
-                    borderRadius: BorderRadius.circular(25),
-                    border: Border.all(
-                      color: isSelected ? Colors.yellow.shade800 : Colors.transparent,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+        Row(
+          children: chipValues.map((value) {
+            final isSelected = selectedAmount == value;
+            final canAfford = widget.wsService.getPlayerBalance() >= value;
+            
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: GestureDetector(
+                  onTap: canAfford ? () {
+                    setState(() {
+                      selectedAmount = value;
+                    });
+                  } : null,
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: isSelected 
+                          ? Colors.orange 
+                          : canAfford 
+                              ? Colors.white.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected 
+                            ? Colors.orange 
+                            : canAfford 
+                                ? Colors.white30
+                                : Colors.grey,
+                        width: 2,
                       ),
-                    ],
-                  ),
-                  child: Text(
-                    '₹$value',
-                    style: TextStyle(
-                      color: canAfford ? Colors.white : Colors.grey.shade400,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '₹$value',
+                        style: TextStyle(
+                          color: canAfford ? Colors.white : Colors.grey,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              );
-            }).toList(),
-          ),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
   }
 
   Widget _buildBettingButtons() {
-    final canAfford = selectedAmount <= widget.wsService.getPlayerBalance();
+    final canAfford = widget.wsService.getPlayerBalance() >= selectedAmount;
     
     return Row(
       children: [
-        // Andar Button
+        // Andar button
         Expanded(
-          child: GestureDetector(
-            onTap: canAfford ? () => _placeBet('andar') : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: canAfford ? [
-                    Colors.blue.shade600,
-                    Colors.blue.shade700,
-                  ] : [
-                    Colors.grey.shade600,
-                    Colors.grey.shade700,
-                  ],
+          child: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ElevatedButton(
+              onPressed: canAfford ? () => _placeBet('andar') : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
               ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
+                  const Text(
                     'ANDAR',
                     style: TextStyle(
-                      color: canAfford ? Colors.white : Colors.grey.shade400,
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     '₹$selectedAmount',
-                    style: TextStyle(
-                      color: canAfford ? Colors.white70 : Colors.grey.shade500,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ],
               ),
@@ -407,51 +367,33 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
           ),
         ),
         
-        const SizedBox(width: 16),
-        
-        // Bahar Button
+        // Bahar button
         Expanded(
-          child: GestureDetector(
-            onTap: canAfford ? () => _placeBet('bahar') : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: canAfford ? [
-                    Colors.red.shade600,
-                    Colors.red.shade700,
-                  ] : [
-                    Colors.grey.shade600,
-                    Colors.grey.shade700,
-                  ],
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: ElevatedButton(
+              onPressed: canAfford ? () => _placeBet('bahar') : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.yellow.shade700,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
               ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
+                  const Text(
                     'BAHAR',
                     style: TextStyle(
-                      color: canAfford ? Colors.white : Colors.grey.shade400,
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     '₹$selectedAmount',
-                    style: TextStyle(
-                      color: canAfford ? Colors.white70 : Colors.grey.shade500,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ],
               ),
@@ -462,64 +404,58 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
     );
   }
 
-  Widget _buildStatusMessage(GamePhase gamePhase) {
-    String message;
-    IconData icon;
-    Color color;
-    
+  Widget _buildStatusMessage(String gamePhase) {
+    String message = 'Waiting...';
+    Color messageColor = Colors.white70;
+    IconData messageIcon = Icons.hourglass_empty;
+
     switch (gamePhase) {
-      case GamePhase.waiting:
-        message = widget.wsService.isHost() 
-            ? 'You are the host. Start the game when ready!'
-            : 'Waiting for the host to start the game...';
-        icon = Icons.hourglass_empty;
-        color = Colors.orange;
+      case 'dealing':
+        message = 'Cards are being dealt. Watch the game!';
+        messageColor = Colors.blue;
+        messageIcon = Icons.style;
         break;
-      case GamePhase.readyToPlay:
-        message = 'Get ready! Cards will be dealt soon...';
-        icon = Icons.timer;
-        color = Colors.yellow;
+      case 'finished':
+        message = 'Round finished. Results coming up...';
+        messageColor = Colors.purple;
+        messageIcon = Icons.check_circle;
         break;
-      case GamePhase.dealing:
-        message = 'Cards are being dealt. Watch for the match!';
-        icon = Icons.style;
-        color = Colors.blue;
+      case 'showResult':
+        message = 'Viewing results. Next round starts soon!';
+        messageColor = Colors.orange;
+        messageIcon = Icons.emoji_events;
         break;
-      case GamePhase.finished:
-        message = 'Round finished! Calculating results...';
-        icon = Icons.calculate;
-        color = Colors.purple;
-        break;
-      case GamePhase.showResult:
-        message = 'Results are in! Check if you won!';
-        icon = Icons.celebration;
-        color = Colors.orange;
+      case 'waitingForPlayers':
+        message = 'No bets placed last round. Next round starts in ${widget.bettingTimeRemaining}s...';
+        messageColor = Colors.amber;
+        messageIcon = Icons.people_outline;
         break;
       default:
-        message = 'Waiting for game updates...';
-        icon = Icons.info;
-        color = Colors.grey;
+        message = 'Get ready for the next betting round!';
+        messageColor = Colors.white70;
+        messageIcon = Icons.refresh;
     }
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: messageColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: messageColor.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
+          Icon(messageIcon, color: messageColor, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: messageColor,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
+              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -528,15 +464,8 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
   }
 
   void _placeBet(String side) {
-    widget.wsService.placeBet(side, selectedAmount);
-    
-    // Show feedback
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Bet placed: ${side.toUpperCase()} - ₹$selectedAmount'),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    if (widget.wsService.getPlayerBalance() >= selectedAmount) {
+      widget.wsService.placeBet(side, selectedAmount);
+    }
   }
 } 

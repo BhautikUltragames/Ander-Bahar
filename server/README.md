@@ -1,6 +1,6 @@
 # Andar Bahar WebSocket Server
 
-This is the Node.js WebSocket server for the Andar Bahar multiplayer game. The server comes with bundled Node.js runtime, so no separate Node.js installation is required.
+This is the Node.js WebSocket server for the Andar Bahar multiplayer game with animated card dealer support. The server comes with bundled Node.js runtime, so no separate Node.js installation is required.
 
 ## ✅ Current Status: Fully Working
 
