@@ -87,12 +87,33 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer> with TickerProv
 
   @override
   Widget build(BuildContext context) {
+    // Fixed header height to align card rows evenly (expanded to avoid overflow)
+    const double headerHeight = 108.0;
     return Column(
+      mainAxisSize: MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        _buildPlayerBetDisplay(),
-        _buildTitleSection(),
-        const SizedBox(height: 8),
-        _buildCardArea(),
+        // Header container with fixed height
+        SizedBox(
+          height: headerHeight,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildPlayerBetDisplay(),
+              _buildTitleSection(),
+            ],
+          ),
+        ),
+        // Card area aligned at top center of remaining space
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _buildCards(),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -124,7 +145,7 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer> with TickerProv
 
   Widget _buildTitleSection() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: widget.titleColor.withOpacity(0.2),
         borderRadius: BorderRadius.circular(20),
@@ -141,6 +162,7 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer> with TickerProv
         ] : null,
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             widget.title,
@@ -164,8 +186,11 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer> with TickerProv
   }
 
   Widget _buildCardArea() {
-    // Display cards directly without expanding to fill vertical space
-    return _buildCards();
+    // Add static top padding and horizontal padding so card rows align
+    return Padding(
+      padding: const EdgeInsets.only(top: 32, left: 8, right: 8),
+      child: _buildCards(),
+    );
   }
 
   Widget _buildCards() {
@@ -231,15 +256,18 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer> with TickerProv
             baseChild = FadeTransition(opacity: _fadeAnimation, child: baseChild);
           }
           return Container(
-            margin: EdgeInsets.only(right: spacing),
+            margin: EdgeInsets.only(right: index < sectionCards.length - 1 ? spacing : 0),
             child: baseChild,
           );
         }).toList();
 
-        // Always render in a Row without scrolling; spacing handles fit
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: cardWidgets,
+        // Render cards in a horizontally scrollable row to handle overflow
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: cardWidgets,
+          ),
         );
       },
     );

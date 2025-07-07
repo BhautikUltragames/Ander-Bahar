@@ -299,9 +299,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
           // Card table
           Expanded(
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Andar pile
+                // Andar pile (fills left half)
                 Expanded(
                   child: AnimatedCardDealer(
                     title: 'ANDAR',
@@ -331,7 +331,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 120),
                       if (gameState?['jokerCard'] != null)
                         CardWidget(
                           card: _convertToPlayingCard(gameState!['jokerCard']),
@@ -355,7 +355,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                   ),
                 ),
                 
-                // Bahar pile
+                // Bahar pile (fills right half)
                 Expanded(
                   child: AnimatedCardDealer(
                     title: 'BAHAR',
