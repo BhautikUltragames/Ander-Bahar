@@ -673,23 +673,6 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      winnerText,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black,
-                            offset: const Offset(1, 1),
-                            blurRadius: 1,
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
                     const SizedBox(height: 4),
                     Text(
                       playerName,
@@ -911,40 +894,6 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                         ),
                       ),
                     ],
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Continue Button (moved down)
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                      elevation: 4,
-                      shadowColor: Colors.green.shade800,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text(
-                      'Continue',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black,
-                            offset: Offset(1, 1),
-                            blurRadius: 1,
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
                 ),
               ],
