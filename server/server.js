@@ -93,8 +93,7 @@ class GlobalGameRoom {
 
   startNewRound() {
     console.log(`Starting round ${this.gameState.roundNumber + 1}`);
-    
-    this.gameState.phase = GAME_PHASES.BETTING;
+    this.gameState.phase = GAME_PHASES.WAITING_FOR_PLAYERS;
     this.gameState.roundNumber++;
     this.gameState.bets = [];
     this.gameState.winningSide = null;
@@ -102,7 +101,7 @@ class GlobalGameRoom {
     this.gameState.andarCards = [];
     this.gameState.baharCards = [];
     this.gameState.totalCardsDealt = 0;
-    this.gameState.bettingTimeLeft = 10;
+    this.gameState.bettingTimeLeft = 0;
     
     // Reset player round bets (all players are connected since we remove disconnected ones)
     this.players.forEach(player => {
@@ -113,12 +112,9 @@ class GlobalGameRoom {
     this.createDeck();
     this.shuffleDeck();
     
-    // Start 10-second betting timer with countdown
-    this.startBettingTimer();
+    // Broadcast new round state; wait for first bet to start timer
     this.broadcastGameState();
   }
-
-
 
   createDeck() {
     this.gameState.deck = [];
@@ -217,14 +213,14 @@ class GlobalGameRoom {
 
     // If we were waiting for players, restart betting phase with shorter timer
     if (this.gameState.phase === GAME_PHASES.WAITING_FOR_PLAYERS) {
-      console.log('Player placed bet during waiting phase. Starting short betting phase...');
+      console.log('Player placed bet during waiting phase. Starting betting phase...');
       // Clear any waiting timer first
       if (this.gameState.bettingTimer) {
         clearTimeout(this.gameState.bettingTimer);
         this.gameState.bettingTimer = null;
       }
       this.gameState.phase = GAME_PHASES.BETTING;
-      this.gameState.bettingTimeLeft = 3; // Shorter 3-second timer to allow for additional bets
+      this.gameState.bettingTimeLeft = 10; // Full 10-second timer
       this.startBettingTimer();
     }
 
@@ -453,13 +449,13 @@ function handleJoinGlobal(ws, data) {
   const playerName = data.playerName || `Player${Date.now() % 1000}`;
   const playerId = uuidv4();
   
+  // Store connection early to receive initial game state
+  playerConnections.set(playerId, ws);
+  ws.playerId = playerId;
+
   // Create new player (always fresh since we remove players when they leave)
   globalRoom.addPlayer(playerId, playerName, true);
   console.log(`Player ${playerName} joined global room`);
-  
-  // Store connection
-  playerConnections.set(playerId, ws);
-  ws.playerId = playerId;
   
   // Send join confirmation
   ws.send(JSON.stringify({

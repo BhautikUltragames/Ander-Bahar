@@ -24,7 +24,7 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
     final gameState = widget.wsService.serverGameState;
     final gamePhase = gameState?['phase'] ?? 'betting';
     final playerBalance = widget.wsService.getPlayerBalance();
-    final canBet = (gamePhase == 'betting' || gamePhase == 'waitingForPlayers') && widget.bettingTimeRemaining > 0;
+    final canBet = (gamePhase == 'betting' && widget.bettingTimeRemaining > 0) || (gamePhase == 'waitingForPlayers');
 
     return Container(
       padding: const EdgeInsets.all(16),

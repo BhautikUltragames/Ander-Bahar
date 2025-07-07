@@ -236,6 +236,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   Widget _buildTopBar(WebSocketService wsService) {
     final gameState = wsService.serverGameState;
     final roundNumber = gameState?['roundNumber'] ?? 0;
+    final bets = gameState?['bets'] as List<dynamic>? ?? [];
     final phase = gameState?['phase'] ?? 'betting';
     final bettingTimeLeft = wsService.getBettingTimeLeft();
     
@@ -255,8 +256,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
             // Spacer to push timer to the right
             const Spacer(),
             
-            // Betting timer (only show during betting phase)
-            if (phase == 'betting')
+            // Betting timer (show only during betting phase after a bet is placed)
+            if (phase == 'betting' && bets.isNotEmpty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
@@ -381,8 +382,31 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
   Widget _buildGameStats(WebSocketService wsService) {
     final gameState = wsService.serverGameState;
     final phase = gameState?['phase'] ?? 'betting';
+    final bets = gameState?['bets'] as List<dynamic>? ?? [];
     final bettingTimeLeft = wsService.getBettingTimeLeft();
     final roundNumber = gameState?['roundNumber'] ?? 0;
+    
+    // Show placeholder until at least one bet is placed
+    if (bets.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.place, color: Colors.white70, size: 48),
+            SizedBox(height: 8),
+            Text(
+              'Place your bets',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // During betting, stats timer is handled in top bar; hide this section
+    if (phase == 'betting') {
+      return const SizedBox.shrink();
+    }
     
     String phaseText = 'Waiting...';
     Color phaseColor = Colors.grey;

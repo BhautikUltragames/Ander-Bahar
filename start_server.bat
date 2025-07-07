@@ -1,4 +1,6 @@
 @echo off
++REM Kill any existing Node.js server to free port 8080
++taskkill /F /IM node.exe /T >nul 2>&1
 echo Starting Andar Bahar WebSocket Server...
 echo.
 
