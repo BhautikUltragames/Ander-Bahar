@@ -243,41 +243,57 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Back button
-            IconButton(
-              onPressed: () {
-                _showLeaveConfirmation();
-              },
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-            ),
-            
-            // Spacer to push timer to the right
-            const Spacer(),
-            
-            // Betting timer (show only during betting phase after a bet is placed)
-            if (phase == 'betting' && bets.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: bettingTimeLeft <= 3 ? Colors.red : Colors.orange,
-                  borderRadius: BorderRadius.circular(20),
+            Row(
+              children: [
+                // Back button
+                IconButton(
+                  onPressed: () {
+                    _showLeaveConfirmation();
+                  },
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.timer, color: Colors.white, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${bettingTimeLeft}s',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+                
+                // Spacer to push timer to the right
+                const Spacer(),
+                
+                // Betting timer (show only during betting phase after a bet is placed)
+                if (phase == 'betting' && bets.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: bettingTimeLeft <= 3 ? Colors.red : Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer, color: Colors.white, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${bettingTimeLeft}s',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            if (phase == 'betting' && bets.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: LinearProgressIndicator(
+                  value: bettingTimeLeft / 10,
+                  backgroundColor: Colors.white24,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    bettingTimeLeft <= 3 ? Colors.red : Colors.orange,
+                  ),
                 ),
               ),
           ],
@@ -319,9 +335,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                 // Center Joker display
                 Container(
                   width: 120,
+                  height: double.infinity,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
@@ -332,7 +348,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 120),
+                      const SizedBox(height: 16),
                       if (gameState?['jokerCard'] != null)
                         CardWidget(
                           card: _convertToPlayingCard(gameState!['jokerCard']),
@@ -386,17 +402,20 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     final bettingTimeLeft = wsService.getBettingTimeLeft();
     final roundNumber = gameState?['roundNumber'] ?? 0;
     
-    // Show placeholder until at least one bet is placed
+    // Show simple one-line placeholder until a bet is placed
     if (bets.isEmpty) {
       return Center(
-        child: Column(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Icon(Icons.place, color: Colors.white70, size: 48),
-            SizedBox(height: 8),
+            Icon(Icons.monetization_on, color: Colors.white70, size: 20),
+            SizedBox(width: 8),
             Text(
-              'Place your bets',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              'Place a bet to start the round',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
