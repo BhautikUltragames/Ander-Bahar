@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/websocket_service.dart';
 import 'multiplayer_game_screen.dart';
+import 'package:andar_bahar_game/services/audio_service.dart';
 
 class _LobbyHoverButton extends StatefulWidget {
   final Widget child;
@@ -27,7 +29,10 @@ class _LobbyHoverButtonState extends State<_LobbyHoverButton> {
       onEnter: widget.isEnabled ? (_) => setState(() => _isHovered = true) : null,
       onExit: widget.isEnabled ? (_) => setState(() => _isHovered = false) : null,
       child: GestureDetector(
-        onTap: widget.isEnabled ? widget.onPressed : null,
+        onTap: widget.isEnabled ? () {
+          AudioService.playClick();
+          widget.onPressed();
+        } : null,
         child: AnimatedScale(
           scale: (_isHovered && widget.isEnabled) ? 1.05 : 1.0,
           duration: const Duration(milliseconds: 200),

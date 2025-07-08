@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
 import '../services/websocket_service.dart';
@@ -7,6 +8,7 @@ import '../widgets/multiplayer_betting_panel.dart';
 import '../widgets/animated_card_dealer.dart';
 import '../models/card.dart';
 import '../models/game_state.dart';
+import 'package:andar_bahar_game/services/audio_service.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({Key? key}) : super(key: key);
@@ -251,6 +253,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
                 // Back button
                 IconButton(
                   onPressed: () {
+                    AudioService.playClick();
                     _showLeaveConfirmation();
                   },
                   icon: const Icon(Icons.arrow_back, color: Colors.white),

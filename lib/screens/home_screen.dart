@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'multiplayer_lobby_screen.dart';
+import 'package:andar_bahar_game/services/audio_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -46,7 +47,10 @@ class _HoverButtonState extends State<_HoverButton> {
             borderRadius: BorderRadius.circular(20),
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: widget.onTap,
+              onTap: () {
+                AudioService.playClick();
+                widget.onTap();
+              },
               child: widget.child,
             ),
           ),
@@ -94,7 +98,10 @@ class _SecondaryHoverButtonState extends State<_SecondaryHoverButton> {
             borderRadius: BorderRadius.circular(15),
             child: InkWell(
               borderRadius: BorderRadius.circular(15),
-              onTap: widget.onTap,
+              onTap: () {
+                AudioService.playClick();
+                widget.onTap();
+              },
               child: widget.child,
             ),
           ),

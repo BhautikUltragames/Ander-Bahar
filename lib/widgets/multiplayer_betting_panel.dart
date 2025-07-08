@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/websocket_service.dart';
+import 'package:andar_bahar_game/services/audio_service.dart';
 
 class MultiplayerBettingPanel extends StatefulWidget {
   final WebSocketService wsService;
@@ -286,6 +288,7 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: GestureDetector(
                   onTap: canAfford ? () {
+                    AudioService.playClick();
                     setState(() {
                       selectedAmount = value;
                     });
@@ -464,6 +467,7 @@ class _MultiplayerBettingPanelState extends State<MultiplayerBettingPanel> {
   }
 
   void _placeBet(String side) {
+    AudioService.playClick();
     if (widget.wsService.getPlayerBalance() >= selectedAmount) {
       widget.wsService.placeBet(side, selectedAmount);
     }
