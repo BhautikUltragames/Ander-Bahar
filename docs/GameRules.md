@@ -4,6 +4,23 @@
 
 **Andar Bahar** is a traditional Indian card game that has been enjoyed for generations. This digital version brings the authentic experience to modern web browsers with beautiful animations, interactive hover effects, animated card dealer, and both single-player and real-time multiplayer modes.
 
+## ⚠️ **CURRENT GAME STATUS**
+
+**Status**: ❌ **GAME RULES IMPLEMENTED BUT CRITICAL BUGS PREVENT GAMEPLAY**
+
+All game rules and features are fully implemented and coded correctly, but critical technical issues make the game currently unplayable:
+
+- ✅ **Game Logic** - All traditional Andar Bahar rules implemented perfectly
+- ✅ **UI Components** - All game interface elements coded and designed
+- ✅ **Animation System** - Professional card dealing animations implemented
+- ❌ **CRITICAL ISSUE** - MaterialLocalizations error crashes all dialogs
+- ❌ **CRITICAL ISSUE** - Navigator context errors break screen navigation
+- ❌ **CRITICAL ISSUE** - Widget unmounting causes mid-game crashes
+- ❌ **RESULT** - Game cannot be played reliably due to technical issues
+
+**For Players**: Wait for technical fixes before attempting to play.
+**For Developers**: All game logic is correct, focus on fixing MaterialApp structure.
+
 ---
 
 ## 🎨 **Visual Design & Color Scheme**

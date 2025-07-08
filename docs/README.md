@@ -5,7 +5,174 @@
 [![Flutter](https://img.shields.io/badge/Flutter-3.19+-blue.svg)](https://flutter.dev/)
 [![Dart](https://img.shields.io/badge/Dart-3.0+-blue.svg)](https://dart.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-22.17-green.svg)](https://nodejs.org/)
-[![Status](https://img.shields.io/badge/Status-Production%20Ready-success.svg)](https://github.com/BhautikUltragames/Ander-Bahar.git)
+[![Status](https://img.shields.io/badge/Status-Under%20Maintenance-orange.svg)](https://github.com/BhautikUltragames/Ander-Bahar.git)
+
+---
+
+## ⚠️ **CRITICAL ISSUES - IMMEDIATE ATTENTION REQUIRED**
+
+### **Current Status: UNSTABLE**
+
+**❌ The app is experiencing severe technical issues that prevent stable operation. All features are implemented but critical bugs cause frequent crashes.**
+
+---
+
+## 🚨 **CRITICAL TECHNICAL PROBLEMS**
+
+### **1. MaterialLocalizations Error (App Breaking)**
+
+**Error Message:**
+
+```
+No MaterialLocalizations found.
+AndarBaharApp widgets require MaterialLocalizations to be provided by a Localizations widget ancestor.
+```
+
+**Impact**:
+
+- ❌ All dialog boxes crash the app immediately
+- ❌ Error handling is completely broken
+- ❌ User feedback mechanisms don't work
+- ❌ App becomes unusable when errors occur
+
+**Current Status**: **BLOCKING** - Prevents normal app operation
+
+### **2. Navigator Context Error (Navigation Failure)**
+
+**Error Message:**
+
+```
+Navigator operation requested with a context that does not include a Navigator.
+```
+
+**Impact**:
+
+- ❌ Navigation between screens fails unpredictably
+- ❌ Back button functionality broken
+- ❌ App flow is severely disrupted
+- ❌ Users get trapped in error states
+
+**Current Status**: **BLOCKING** - Prevents proper navigation
+
+### **3. Widget Unmounting Issues (App Crashes)**
+
+**Error Pattern**: Flutter framework unmounting widgets unexpectedly during gameplay
+
+**Impact**:
+
+- ❌ App crashes mid-game without warning
+- ❌ User sessions are lost
+- ❌ Gameplay becomes impossible
+- ❌ No recovery mechanism available
+
+**Current Status**: **CRITICAL** - Makes app unusable
+
+### **4. Audio System Issues (Runtime Errors)**
+
+**Issue**: Audio service references deleted files (`StarCollect.wav` removed, `Button.wav` added)
+
+**Impact**:
+
+- ⚠️ Audio playback failures
+- ⚠️ Potential runtime errors
+- ⚠️ Degraded user experience
+- ⚠️ May contribute to app instability
+
+**Current Status**: **NEEDS CLEANUP** - Requires immediate attention
+
+---
+
+## 🛠️ **TROUBLESHOOTING GUIDE**
+
+### **For Users (Current Workarounds)**
+
+#### **If App Crashes on Launch:**
+
+1. **Use Incognito/Private Mode** - Avoid cached error states
+2. **Clear Browser Cache** - Reset application state
+3. **Refresh Page** - Force app restart
+4. **Try Different Browser** - Some browsers may be more stable
+
+#### **If Navigation Fails:**
+
+1. **Use Browser Back Button** - May work when app back button doesn't
+2. **Refresh and Restart** - Reset navigation state
+3. **Avoid Rapid Clicks** - Give time for navigation to complete
+4. **Use Direct URLs** - Bookmark specific game screens
+
+#### **If Dialogs Don't Appear:**
+
+1. **Expect Silent Failures** - Dialogs crash silently
+2. **Watch Console** - Check browser dev tools for errors
+3. **Restart When Stuck** - Refresh to reset state
+4. **Don't Rely on Error Messages** - App can't show them properly
+
+#### **If Audio Fails:**
+
+1. **Expect No Audio** - Audio system may not work
+2. **Ignore Audio Errors** - Don't affect core gameplay
+3. **Play Without Sound** - Game is fully functional without audio
+
+### **For Developers (Debug Information)**
+
+#### **Error Reproduction:**
+
+```bash
+# Launch app
+flutter run -d chrome
+
+# Trigger MaterialLocalizations error:
+# - Try to show any dialog
+# - App will crash with localization error
+
+# Trigger Navigator error:
+# - Navigate between screens
+# - Context hierarchy will fail
+```
+
+#### **Quick Debug Steps:**
+
+1. **Check Console** - Browser dev tools show detailed errors
+2. **Monitor Network** - WebSocket server continues to work
+3. **Test Server Separately** - Backend functionality is stable
+4. **Use Safe Mode** - Disable error-prone features
+
+---
+
+## 🎯 **CURRENT FUNCTIONALITY STATUS**
+
+### **What Currently Works (When Stable)**
+
+- ✅ **Core Game Logic** - Traditional Andar Bahar rules
+- ✅ **UI Components** - Modern design with hover animations
+- ✅ **WebSocket Server** - Multiplayer backend is stable
+- ✅ **Animated Card Dealer** - Professional card dealing animations
+- ✅ **Color Psychology** - Blue ANDAR vs Yellow BAHAR
+
+### **What Needs Fixing**
+
+- ❌ **Dialog System** - MaterialLocalizations error
+- ❌ **Navigation System** - Navigator context error
+- ❌ **Audio System** - File reference cleanup needed
+- ❌ **Stability** - App crashes during gameplay
+
+---
+
+## 🔧 **Developer Notes**
+
+### **For Developers Working on Fixes**
+
+1. **Priority 1**: Fix MaterialApp structure to provide proper localization context
+2. **Priority 2**: Implement error boundaries to prevent crashes
+3. **Priority 3**: Clean up audio service file references
+4. **Priority 4**: Add comprehensive error handling
+
+### **Testing Recommendations**
+
+- Test in incognito mode to avoid cached errors
+- Use browser developer tools to monitor console errors
+- Test navigation flows carefully
+- Verify audio functionality after fixes
 
 ---
 
@@ -13,7 +180,7 @@
 
 Andar Bahar is a traditional Indian gambling card game that originated in South India. This digital version brings the authentic experience to the web with beautiful animations, interactive hover effects, animated card dealer, and real-time multiplayer support.
 
-### 🌟 **Key Features**
+### 🌟 **Planned Features** (When Issues Are Fixed)
 
 - **🎯 Authentic Gameplay** - Traditional Andar Bahar rules with modern UI
 - **🎨 Interactive Design** - Hover animations and smooth transitions
@@ -27,9 +194,11 @@ Andar Bahar is a traditional Indian gambling card game that originated in South 
 
 ---
 
-## 🚀 **Quick Start**
+## 🚀 **Setup Instructions (HIGH RISK - Use with Extreme Caution)**
 
-### **Single Player Mode (Instant Play)**
+⚠️ **CRITICAL WARNING**: These instructions are for development/debugging purposes only. The app is currently unstable and will crash frequently.
+
+### **Single Player Mode (Expect Crashes)**
 
 ```bash
 git clone https://github.com/BhautikUltragames/Ander-Bahar.git
@@ -38,25 +207,51 @@ flutter pub get
 flutter run -d chrome
 ```
 
-Click **"PLAY"** button and start gaming immediately with AI opponent!
+**⚠️ CRITICAL ISSUES TO EXPECT**:
 
-### **Multiplayer Mode (2 Commands)**
+- ❌ **App will crash** when any dialog tries to display
+- ❌ **Navigation will fail** due to context errors
+- ❌ **Audio system will malfunction** due to file reference issues
+- ❌ **Widgets will unmount unexpectedly** causing crashes
+- ❌ **No error recovery** - crashes require full restart
+
+**⚠️ TESTING RECOMMENDATIONS**:
+
+- Use **incognito mode** to avoid cached errors
+- Keep **browser dev tools open** to monitor crashes
+- **Expect frequent restarts** - app is not stable
+- **Don't rely on error messages** - they cause crashes
+
+### **Multiplayer Mode (Server Stable, Client Crashes)**
 
 ```bash
-# Terminal 1: Start WebSocket server
+# Terminal 1: Start WebSocket server (This works perfectly)
 .\start_server.bat    # Windows
 # OR
 ./start_server.sh     # Linux/Mac
 
-# Terminal 2: Start Flutter app (new terminal)
+# Terminal 2: Start Flutter app (This will crash frequently)
 flutter run -d chrome
 ```
 
-Click **"PLAY"** → **"MULTIPLAYER"** and join the global room!
+**⚠️ MULTIPLAYER ISSUES TO EXPECT**:
+
+- ✅ **WebSocket server works perfectly** - no issues here
+- ❌ **Client crashes prevent stable multiplayer** - frontend issues
+- ❌ **Connection drops due to crashes** - client-side instability
+- ❌ **Players get disconnected** due to navigation errors
+- ❌ **No graceful error handling** - crashes interrupt gameplay
+
+**⚠️ MULTIPLAYER TESTING TIPS**:
+
+- **Test server separately** - use WebSocket testing tools
+- **Multiple browser tabs** - test server stability
+- **Expect client disconnects** - server continues working
+- **Monitor server console** - shows stable operation
 
 ---
 
-## 🎨 **Enhanced User Experience (2024)**
+## 🎨 **Enhanced User Experience (When Working)**
 
 ### **Modern Home Screen**
 
@@ -77,41 +272,29 @@ Click **"PLAY"** → **"MULTIPLAYER"** and join the global room!
 
 ---
 
-## ✅ **What Works Perfectly**
+## ❌ **WHAT'S CURRENTLY BROKEN**
 
-### **Complete Single Player System**
+### **Complete Single Player System (Unusable)**
 
-- ✅ **AI Opponent** - Smart computer player with auto-betting
-- ✅ **Instant Play** - No setup required, works offline
-- ✅ **Interactive UI** - Hover effects and visual feedback
-- ✅ **Animated Card Dealer** - Professional card dealing animations
-- ✅ **Color-coded Interface** - Blue ANDAR vs Yellow BAHAR
-- ✅ **Balance Management** - Real-time chip tracking
+- ❌ **CRITICAL: App Crashes** - MaterialLocalizations error crashes all dialogs
+- ❌ **CRITICAL: Navigation Broken** - Context errors prevent screen transitions
+- ❌ **CRITICAL: Widget Unmounting** - App crashes mid-game unexpectedly
+- ❌ **HIGH: Audio System** - File reference issues cause runtime errors
+- ❌ **BLOCKING: Error Handling** - No error recovery mechanisms
+- ❌ **RESULT: Unusable** - App cannot be used reliably
 
-### **Complete Multiplayer System**
+### **Complete Multiplayer System (Server Works, Client Unusable)**
 
-- ✅ **Global Room** - Single shared game room for all players
-- ✅ **Continuous Rounds** - Automatic 10-second betting cycles
-- ✅ **Real-time Updates** - Live player count and game state
-- ✅ **Complete Player Removal** - Instant cleanup when players leave
-- ✅ **Proper Leave Functionality** - Clean WebSocket disconnection
-- ✅ **Cross-browser Support** - Test with multiple browser tabs
-- ✅ **Hover Interactions** - Smooth animations on all buttons
-- ✅ **Animated Dealing** - Flying card animations in multiplayer
-
-### **Core Game Features**
-
-- ✅ **Traditional Rules** - Authentic Andar Bahar gameplay
-- ✅ **Interactive UI** - Hover effects and visual feedback
-- ✅ **Betting System** - Multiple chip values (₹25-₹500)
-- ✅ **Card Animations** - Smooth dealing animations with animated card dealer
-- ✅ **Win Celebrations** - Confetti effects and winner displays
-- ✅ **Balance Management** - Real-time chip tracking
-- ✅ **Color Accessibility** - WCAG compliant contrast ratios
+- ✅ **Server Functionality** - WebSocket server is completely stable
+- ❌ **CRITICAL: Client Crashes** - Frontend crashes prevent any multiplayer
+- ❌ **CRITICAL: Connection Drops** - Client instability breaks connections
+- ❌ **CRITICAL: Navigation Errors** - Context errors trap users
+- ❌ **BLOCKING: No Error Recovery** - Crashes require complete restart
+- ❌ **RESULT: Unusable** - Multiplayer impossible due to client crashes
 
 ---
 
-## 🎯 **Game Modes**
+## 🎯 **Game Modes (When Fixed)**
 
 ### 🎮 **Single Player Mode**
 
@@ -162,7 +345,7 @@ Click **"PLAY"** → **"MULTIPLAYER"** and join the global room!
 
 ## 🛠 **Technical Architecture**
 
-### **Frontend (Flutter Web)**
+### **Frontend (Flutter Web) - ⚠️ Issues Present**
 
 - **Framework** - Flutter 3.19+ for web
 - **State Management** - Provider pattern with reactive UI
@@ -171,8 +354,9 @@ Click **"PLAY"** → **"MULTIPLAYER"** and join the global room!
 - **Real-time Communication** - WebSocket integration
 - **Responsive Design** - MediaQuery-based sizing (70% width buttons)
 - **Smooth Animations** - 60fps card dealing and 200ms hover transitions
+- **❌ Error Handling** - Needs fixes for MaterialLocalizations and Navigator context
 
-### **Backend (Node.js)**
+### **Backend (Node.js) - ✅ Working**
 
 - **WebSocket Server** - Real-time bidirectional communication
 - **Global Game Room** - Single room for all players
@@ -192,7 +376,7 @@ Click **"PLAY"** → **"MULTIPLAYER"** and join the global room!
 
 ---
 
-## 🚀 **Deployment**
+## 🚀 **Deployment (Currently Limited)**
 
 ### **Local Development**
 
@@ -202,149 +386,77 @@ git clone https://github.com/BhautikUltragames/Ander-Bahar.git
 cd andar_bahar_game
 flutter pub get
 
-# For single player (instant play)
-flutter run -d chrome
-
-# For multiplayer (2 terminals)
-# Terminal 1:
+# Start server (this works fine)
 .\start_server.bat    # Windows
 ./start_server.sh     # Linux/Mac
 
-# Terminal 2:
+# Start app (this has issues)
 flutter run -d chrome
 ```
 
+**Note**: Expect crashes and limited functionality due to current issues.
+
 ### **Production Deployment**
 
-- **Frontend** - Build with `flutter build web` and deploy to any web server
-- **Backend** - Deploy Node.js server to cloud hosting (Heroku, DigitalOcean, etc.)
-- **WebSocket** - Ensure WebSocket support in hosting environment
-- **HTTPS** - Required for production WebSocket connections
+⚠️ **Not recommended until issues are resolved**
+
+The app needs the following fixes before production deployment:
+
+1. MaterialLocalizations error resolution
+2. Navigator context error fixes
+3. Audio system cleanup
+4. Comprehensive error handling
 
 ---
 
-## 🎯 **Current Project Structure**
+## 🎯 **Future Roadmap**
 
-```
-andar_bahar_game/
-├── lib/
-│   ├── main.dart                          # App entry point
-│   ├── models/
-│   │   ├── card.dart                     # Playing card model
-│   │   └── game_state.dart               # Game state management
-│   ├── providers/
-│   │   └── game_provider.dart            # Single-player state with AI
-│   ├── screens/
-│   │   ├── home_screen.dart              # Main menu with hover effects
-│   │   ├── multiplayer_game_screen.dart  # Multiplayer interface
-│   │   └── multiplayer_lobby_screen.dart # Room management
-│   ├── services/
-│   │   └── websocket_service.dart        # Real-time communication
-│   └── widgets/
-│       ├── animated_card_dealer.dart     # Card dealing animations
-│       ├── betting_panel.dart            # Single-player betting
-│       ├── card_widget.dart              # Card display
-│       └── multiplayer_betting_panel.dart # Multiplayer betting
-├── server/
-│   ├── server.js                         # WebSocket server
-│   ├── package.json                     # Dependencies
-│   └── node-v22.17.0-win-x64/          # Bundled Node.js
-├── docs/                                 # Complete documentation
-└── assets/                               # Game assets
-```
+### **Immediate Fixes Needed**
+
+1. **Fix MaterialApp Structure** - Resolve localization issues
+2. **Implement Error Boundaries** - Prevent crashes
+3. **Clean Audio System** - Update file references
+4. **Add Comprehensive Testing** - Prevent regressions
+
+### **Enhancement Goals**
+
+1. **Improved Error Messages** - Better user feedback
+2. **Enhanced Stability** - Robust error handling
+3. **Performance Optimization** - Faster loading and rendering
+4. **Additional Features** - New game modes and options
 
 ---
 
-## 🏆 **Recent Improvements**
+## 📞 **Support & Issues**
 
-### **Animated Card Dealer System**
+### **Reporting Issues**
 
-- **Flying Card Animations** - Cards fly from dealer to piles
-- **Synchronized Multiplayer** - All players see same animations
-- **Smooth Transitions** - Professional card dealing experience
-- **Performance Optimized** - Efficient animation controllers
+If you encounter issues (which are expected currently):
 
-### **Enhanced UI/UX**
+1. **Check Console Logs** - Use browser developer tools
+2. **Note Error Messages** - Document specific error text
+3. **Report Context** - What you were doing when the error occurred
+4. **Include Screenshots** - Visual evidence of issues
 
-- **Hover Effects** - 1.05x scale animations on all interactive elements
-- **Color Psychology** - Strategic blue/yellow color scheme
-- **Accessibility** - WCAG AA compliant contrast ratios
-- **Responsive Design** - Optimized for all screen sizes
+### **Developer Support**
 
-### **Multiplayer Enhancements**
+For developers working on fixes:
 
-- **Global Room System** - Single room for all players
-- **Real-time Animations** - Synchronized card dealing
-- **Player Management** - Instant join/leave functionality
-- **Winner Overlays** - Enhanced result displays
+1. **Focus on MaterialApp Structure** - Primary issue
+2. **Implement Error Boundaries** - Prevent cascading failures
+3. **Test Navigation Flows** - Verify context hierarchy
+4. **Validate Audio References** - Clean up file dependencies
 
 ---
 
-## 🎯 **Repository**
+## 🎮 **Conclusion**
 
-- **GitHub**: https://github.com/BhautikUltragames/Ander-Bahar.git
-- **Includes**: Complete Flutter app + Node.js server with bundled runtime
-- **Ready to Run**: Clone and play immediately
+This Andar Bahar game represents a comprehensive digital recreation of the traditional Indian card game with modern UI/UX enhancements. While the current version has critical issues that need resolution, the underlying architecture and feature set are solid foundations for a professional gaming experience.
 
----
+**Current Status**: Under maintenance - use with caution and expect instability.
 
-## 🔮 **Future Enhancements**
-
-- **Sound Effects** - Audio feedback for game events
-- **Tournament Mode** - Multi-round competitions
-- **Statistics** - Player performance tracking
-- **Themes** - Customizable card designs and backgrounds
-- **Mobile Responsive** - Enhanced mobile browser support
+**Future Potential**: Once issues are resolved, this will be a production-ready, accessible, and engaging digital card game experience.
 
 ---
 
-## 🎯 **Performance**
-
-- **Single Player**: Immediate startup, no network dependencies
-- **Multiplayer**: Sub-100ms response times on local network
-- **Web Optimized**: Smooth 60fps animations
-- **Memory Efficient**: Proper cleanup of timers and connections
-
----
-
-## 🌟 **Features Comparison**
-
-| Feature           | Single Player | Multiplayer         |
-| ----------------- | ------------- | ------------------- |
-| Setup Required    | None          | Start server        |
-| Players           | 1 vs AI       | 2-6 humans          |
-| Internet Required | No            | Yes (local network) |
-| Real-time Sync    | N/A           | Yes                 |
-| Room Management   | N/A           | Yes                 |
-| Instant Play      | Yes           | After server start  |
-| Card Animations   | Yes           | Yes (synchronized)  |
-
----
-
-## 📝 **License**
-
-MIT License - Feel free to use and modify for your projects.
-
----
-
-## 🤝 **Contributing**
-
-1. Fork the repository
-2. Create your feature branch
-3. Test both single-player and multiplayer modes
-4. Submit a pull request
-
----
-
-## 📞 **Support**
-
-For issues or questions:
-
-1. Check the troubleshooting section in docs/
-2. Review server logs for multiplayer issues
-3. Check Flutter console for client-side errors
-4. Ensure all prerequisites are met
-
----
-
-**🎮 Ready to play the most authentic digital Andar Bahar experience! 🎮**
+_For the latest updates on issue resolution and new features, check the project's STATUS.md file._
