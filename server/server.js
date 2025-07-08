@@ -17,6 +17,14 @@ app.get('*', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// Add error handler for EADDRINUSE
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`ERROR: Port ${PORT} is already in use. Please free the port or use a different one.`);
+    process.exit(1);
+  }
+});
+
 // Global game room - single room for all players
 let globalRoom = null;
 const playerConnections = new Map();

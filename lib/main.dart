@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'providers/game_provider.dart';
+import 'providers/auth_provider.dart';
 import 'services/websocket_service.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() {
-  runApp(const AndarBaharApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => GameProvider()),
+        ChangeNotifierProvider(create: (_) => WebSocketService()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
+      child: const AndarBaharApp(),
+    ),
+  );
 }
 
 class AndarBaharApp extends StatelessWidget {
@@ -13,32 +26,43 @@ class AndarBaharApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => GameProvider()),
-        ChangeNotifierProvider(create: (_) => WebSocketService()),
+    // Trigger auth initialization
+    // AuthProvider constructor calls init()
+    context.read<AuthProvider>();
+    return MaterialApp(
+      title: 'Andar Bahar - अंदर बाहर',
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
-      child: MaterialApp(
-        title: 'Andar Bahar - अंदर बाहर',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: Colors.orange,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
+      supportedLocales: const [
+        Locale('en', ''), // English
+        Locale('hi', ''), // Hindi
+      ],
+      theme: ThemeData(
+        primarySwatch: Colors.orange,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
           ),
-
         ),
-        home: const HomeScreen(),
+      ),
+      home: Consumer<AuthProvider>(
+        builder: (context, authProvider, _) {
+          return authProvider.isSignedIn
+              ? const HomeScreen()
+              : const LoginScreen();
+        },
       ),
     );
   }

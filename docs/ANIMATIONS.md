@@ -648,7 +648,7 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer>
     return Center(
       child: AnimatedBuilder(
         animation: Listenable.merge([_dealerController, _cardController]),
-        builder: (context, child) {
+      builder: (context, child) {
           return Transform.rotate(
             angle: _dealerRotation.value,
             child: Transform.translate(
@@ -658,15 +658,15 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer>
               ),
               child: Transform.scale(
                 scale: _cardScale.value,
-                child: Container(
+        child: Container(
                   width: 80,
                   height: 112,
-                  decoration: BoxDecoration(
+          decoration: BoxDecoration(
                     color: Colors.blue.shade800,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.white, width: 2),
                     boxShadow: [
-                      BoxShadow(
+              BoxShadow(
                         color: Colors.black.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
@@ -680,11 +680,11 @@ class _AnimatedCardDealerState extends State<AnimatedCardDealer>
                   ),
                 ),
               ),
-            ),
-          );
-        },
+        ),
+      );
+    },
       ),
-    );
+  );
   }
 }
 ```
@@ -736,7 +736,7 @@ class _CardDealingSequenceState extends State<CardDealingSequence>
       return Tween<Offset>(
         begin: Offset.zero,
         end: Offset(index.isEven ? -2.0 : 2.0, 0),
-      ).animate(CurvedAnimation(
+    ).animate(CurvedAnimation(
         parent: _sequenceController,
         curve: Interval(
           startTime,
@@ -751,7 +751,7 @@ class _CardDealingSequenceState extends State<CardDealingSequence>
   Widget build(BuildContext context) {
     return Stack(
       alignment: Alignment.center,
-      children: [
+          children: [
         // Dealer position
         const AnimatedCardDealer(isDealing: true),
 
@@ -772,10 +772,10 @@ class _CardDealingSequenceState extends State<CardDealingSequence>
                   card: card,
                   size: CardSize.small,
                   showFace: true,
-                ),
-              );
-            },
-          );
+        ),
+      );
+    },
+  );
         }).toList(),
       ],
     );

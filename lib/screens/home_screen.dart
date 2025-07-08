@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'multiplayer_lobby_screen.dart';
 import 'package:andar_bahar_game/services/audio_service.dart';
+import '../providers/auth_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -222,6 +224,11 @@ class _HomeScreenState extends State<HomeScreen>
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
+          // User Profile Section
+          _buildUserProfile(),
+          
+          const SizedBox(height: 20),
+          
           // App logo/title
           Container(
             padding: const EdgeInsets.all(20),
@@ -293,6 +300,156 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildUserProfile() {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              // User Profile Picture
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 2,
+                  ),
+                ),
+                child: ClipOval(
+                  child: authProvider.userPhotoUrl.isNotEmpty
+                      ? Image.network(
+                          authProvider.userPhotoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey.shade300,
+                              child: Icon(
+                                Icons.person,
+                                size: 30,
+                                color: Colors.grey.shade600,
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: Colors.grey.shade300,
+                          child: Icon(
+                            Icons.person,
+                            size: 30,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                ),
+              ),
+              
+              const SizedBox(width: 16),
+              
+              // User Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      authProvider.userDisplayName,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      authProvider.userEmail,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Logout Button
+              _SecondaryHoverButton(
+                width: 90,
+                height: 40,
+                onTap: () async {
+                  await _showLogoutDialog(authProvider);
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade600,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.logout,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Logout',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showLogoutDialog(AuthProvider authProvider) async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await authProvider.signOut();
+              },
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
     );
   }
 

@@ -1,0 +1,6 @@
+# Google Logo Placeholder
+# This file should be replaced with the actual Google logo image (google_logo.png)
+# Download the official Google logo from: https://developers.google.com/identity/branding-guidelines
+# Recommended size: 20x20 pixels for the sign-in button
+
+# For now, the app will fall back to using an icon if this image is not found. 
