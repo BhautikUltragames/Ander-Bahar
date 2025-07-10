@@ -7,12 +7,14 @@ class AuthProvider extends ChangeNotifier {
     init();
   }
   GoogleSignInAccount? _user;
+  bool _isInitialized = false;
   bool _isSigningIn = false;
   String _errorMessage = '';
 
   // Getters
   GoogleSignInAccount? get user => _user;
   bool get isSignedIn => _user != null;
+  bool get isInitialized => _isInitialized;
   bool get isSigningIn => _isSigningIn;
   String get errorMessage => _errorMessage;
   String get userDisplayName => _user?.displayName ?? 'Guest';
@@ -25,6 +27,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await AuthService.init();
       _user = AuthService.currentUser;
+      _isInitialized = true;
       notifyListeners();
       
       // Listen to auth state changes
@@ -34,6 +37,7 @@ class AuthProvider extends ChangeNotifier {
       });
     } catch (error) {
       _errorMessage = error.toString();
+      _isInitialized = true;
       notifyListeners();
     }
   }

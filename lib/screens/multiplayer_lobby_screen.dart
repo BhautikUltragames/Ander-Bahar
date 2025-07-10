@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/websocket_service.dart';
 import 'multiplayer_game_screen.dart';
 import 'package:andar_bahar_game/services/audio_service.dart';
+import '../widgets/connectivity_listener.dart';
 
 class _LobbyHoverButton extends StatefulWidget {
   final Widget child;
@@ -142,7 +143,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ConnectivityListener(
+      child: Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: RadialGradient(
@@ -218,8 +220,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             ],
           ),
         ),
-      ),
-    );
+      ),  // close Container
+      ),  // close Scaffold
+    );    // close ConnectivityListener
   }
 
   Widget _buildHeader() {

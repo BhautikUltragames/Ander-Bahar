@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/audio_service.dart';
+import '../widgets/connectivity_listener.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -60,7 +61,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ConnectivityListener(
+      child: Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: RadialGradient(
@@ -116,8 +118,9 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
-      ),
-    );
+      ),  // close Container
+      ),  // close Scaffold
+    );    // close ConnectivityListener
   }
 
   Widget _buildGameTitle() {

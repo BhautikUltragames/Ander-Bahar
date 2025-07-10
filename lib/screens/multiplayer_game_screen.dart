@@ -9,6 +9,7 @@ import '../widgets/animated_card_dealer.dart';
 import '../models/card.dart';
 import '../models/game_state.dart';
 import 'package:andar_bahar_game/services/audio_service.dart';
+import '../widgets/connectivity_listener.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
   const MultiplayerGameScreen({Key? key}) : super(key: key);
@@ -19,6 +20,7 @@ class MultiplayerGameScreen extends StatefulWidget {
 
 class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
     with TickerProviderStateMixin {
+  bool _offlineDialogShowing = false;
   late ConfettiController _confettiController;
   late AnimationController _cardAnimationController;
   late Animation<double> _cardSlideAnimation;
@@ -58,6 +60,33 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
     // Set up WebSocket callbacks
     final wsService = Provider.of<WebSocketService>(context, listen: false);
+    // Handle connection lost/restored
+    wsService.onError = (message) {
+      if (!mounted) return;
+      // Lost connection
+      if (message.contains('lost') || message.contains('Connection lost')) {
+        if (!_offlineDialogShowing) {
+          _offlineDialogShowing = true;
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => AlertDialog(
+              title: const Text('Connection Error'),
+              content: const Text('Internet connection lost. Please check your network.'),
+            ),
+          ).then((_) {
+            _offlineDialogShowing = false;
+          });
+        }
+      }
+      // Restored connection
+      else if (message.contains('restored') || message.contains('Internet connection restored')) {
+        if (_offlineDialogShowing) {
+          Navigator.of(context, rootNavigator: true).pop();
+          _offlineDialogShowing = false;
+        }
+      }
+    };
     wsService.onGameStateUpdate = (gameState, players) {
       if (mounted) {
         setState(() {
@@ -156,66 +185,68 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<WebSocketService>(
-      builder: (context, wsService, child) {
-        return Scaffold(
-          body: Stack(
-            children: [
-              // Background
-              _buildBackground(),
-              
-              // Main Layout with Player Panel
-              Row(
-                children: [
-                  // Left Player Panel
-                  _buildPlayerPanel(wsService),
-                  
-                  // Main Game Area
-                  Expanded(
-                    child: Column(
-                      children: [
-                        // Top Bar
-                        _buildTopBar(wsService),
-                        
-                        // Dealer section removed
-                        
-                        // Game Table
-                        Expanded(
-                          child: _buildGameTable(wsService),
-                        ),
-                        
-                        // Multiplayer Betting Panel
-                        _buildMultiplayerBettingPanel(wsService),
-                      ],
+    return ConnectivityListener(
+      child: Consumer<WebSocketService>(
+        builder: (context, wsService, child) {
+          return Scaffold(
+            body: Stack(
+              children: [
+                // Background
+                _buildBackground(),
+                
+                // Main Layout with Player Panel
+                Row(
+                  children: [
+                    // Left Player Panel
+                    _buildPlayerPanel(wsService),
+                    
+                    // Main Game Area
+                    Expanded(
+                      child: Column(
+                        children: [
+                          // Top Bar
+                          _buildTopBar(wsService),
+                          
+                          // Dealer section removed
+                          
+                          // Game Table
+                          Expanded(
+                            child: _buildGameTable(wsService),
+                          ),
+                          
+                          // Multiplayer Betting Panel
+                          _buildMultiplayerBettingPanel(wsService),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              
-              // Confetti overlay
-              Align(
-                alignment: Alignment.topCenter,
-                child: ConfettiWidget(
-                  confettiController: _confettiController,
-                  blastDirectionality: BlastDirectionality.explosive,
-                  shouldLoop: false,
-                  colors: const [
-                    Colors.green,
-                    Colors.blue,
-                    Colors.pink,
-                    Colors.orange,
-                    Colors.purple
                   ],
                 ),
-              ),
-              
-              // Winner overlay - show when round finished (game continues even if players disconnect)
-              if (wsService.serverGameState?['phase'] == 'finished')
-                _buildWinnerOverlay(wsService),
-            ],
-          ),
-        );
-      },
+                
+                // Confetti overlay
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConfettiWidget(
+                    confettiController: _confettiController,
+                    blastDirectionality: BlastDirectionality.explosive,
+                    shouldLoop: false,
+                    colors: const [
+                      Colors.green,
+                      Colors.blue,
+                      Colors.pink,
+                      Colors.orange,
+                      Colors.purple
+                    ],
+                  ),
+                ),
+                
+                // Winner overlay - show when round finished (game continues even if players disconnect)
+                if (wsService.serverGameState?['phase'] == 'finished')
+                  _buildWinnerOverlay(wsService),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

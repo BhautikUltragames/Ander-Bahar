@@ -445,8 +445,9 @@ function handleMessage(ws, data) {
     case 'placeBet':
       handlePlaceBet(ws, data);
       break;
-    case 'pong':
-      // Handle pong responses if needed
+    case 'ping':
+      // Respond to client heartbeat
+      ws.send(JSON.stringify({ type: 'pong' }));
       break;
     default:
       console.log(`Unknown message type: ${data.type}`);

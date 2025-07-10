@@ -3,12 +3,18 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/foundation.dart';
 import '../models/game_state.dart';
+import 'dart:html' as html; // for web offline detection
 
 class WebSocketService extends ChangeNotifier {
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   bool _isConnected = false;
   String? _playerId;
+  // Heartbeat timers for connectivity check
+  Timer? _pingTimer;
+  Timer? _pongTimeoutTimer;
+  final Duration _pingInterval = const Duration(seconds: 5);
+  final Duration _pongTimeout = const Duration(seconds: 3);
   
   // Game state from server
   Map<String, dynamic>? _serverGameState;
@@ -47,8 +53,21 @@ class WebSocketService extends ChangeNotifier {
   
   // Connect to WebSocket server and auto-join global room
   Future<void> connectAndJoinGlobal(String playerName) async {
+    // Register browser offline/online events (web only)
+    html.window.onOffline.listen((_) {
+      _handleConnectionLost();
+      onError?.call('Internet connection lost');
+    });
+    html.window.onOnline.listen((_) {
+      onError?.call('Internet connection restored');
+    });
+
     try {
-      _channel = WebSocketChannel.connect(Uri.parse('ws://localhost:8080'));
+      // Determine WebSocket URL dynamically from current host (supports localhost or ngrok public URL)
+      final host = html.window.location.host;  // e.g., 'localhost:8080' or 'abcd1234.ngrok-free.app'
+      final scheme = html.window.location.protocol == 'https:' ? 'wss' : 'ws';
+      final wsUrl = '$scheme://$host';
+      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       
       _subscription = _channel!.stream.listen(
         (message) {
@@ -62,14 +81,29 @@ class WebSocketService extends ChangeNotifier {
         },
         onDone: () {
           print('WebSocket connection closed');
-          _isConnected = false;
-          Future.microtask(() => notifyListeners());
+          // Stop heartbeat timers
+          _pingTimer?.cancel();
+          _pongTimeoutTimer?.cancel();
+          // Notify connection lost
+          _handleConnectionLost();
         },
       );
       
       _isConnected = true;
       print('Connected to WebSocket server');
       
+      // Start heartbeat ping
+      _pingTimer = Timer.periodic(_pingInterval, (_) {
+        if (_isConnected) {
+          _sendMessage({'type': 'ping'});
+          // Expect a pong within timeout
+          _pongTimeoutTimer?.cancel();
+          _pongTimeoutTimer = Timer(_pongTimeout, () {
+            _handleConnectionLost();
+          });
+        }
+      });
+
       // Auto-join global room
       _sendMessage({
         'type': 'joinGlobal',
@@ -83,8 +117,18 @@ class WebSocketService extends ChangeNotifier {
     }
   }
   
+  // Handle connection lost due to missing pong
+  void _handleConnectionLost() {
+    _isConnected = false;
+    onError?.call('Connection lost: no response from server');
+    notifyListeners();
+  }
+
   // Disconnect from server
   void disconnect() {
+    // Stop heartbeat timers
+    _pingTimer?.cancel();
+    _pongTimeoutTimer?.cancel();
     _subscription?.cancel();
     _channel?.sink.close();
     _isConnected = false;
@@ -134,6 +178,11 @@ class WebSocketService extends ChangeNotifier {
           print('DEBUG: Game state - Phase: $phase, Round: $round, Time: ${timeLeft}s, Players: ${_players.length}');
           
           onGameStateUpdate?.call(_serverGameState!, _players);
+          break;
+          
+        case 'pong':
+          // Received heartbeat response
+          _pongTimeoutTimer?.cancel();
           break;
           
         case 'error':

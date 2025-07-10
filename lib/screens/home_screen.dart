@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'multiplayer_lobby_screen.dart';
 import 'package:andar_bahar_game/services/audio_service.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/connectivity_listener.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -174,45 +175,47 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.center,
-            radius: 1.2,
-            colors: [
-              Colors.orange.shade600,
-              Colors.red.shade700,
-              Colors.red.shade900,
-            ],
+    return ConnectivityListener(
+      child: Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.center,
+              radius: 1.2,
+              colors: [
+                Colors.orange.shade600,
+                Colors.red.shade700,
+                Colors.red.shade900,
+              ],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              _buildHeader(),
-              
-              // Main content
-              Expanded(
-                child: SingleChildScrollView(
-                  child: AnimatedBuilder(
-                    animation: _animationController,
-                    builder: (context, child) {
-                      return FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: SlideTransition(
-                          position: _slideAnimation,
-                          child: _buildMainContent(),
-                        ),
-                      );
-                    },
+          child: SafeArea(
+            child: Column(
+              children: [
+                // Header
+                _buildHeader(),
+                
+                // Main content
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: AnimatedBuilder(
+                      animation: _animationController,
+                      builder: (context, child) {
+                        return FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: SlideTransition(
+                            position: _slideAnimation,
+                            child: _buildMainContent(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-              
+                
 
-            ],
+              ],
+            ),
           ),
         ),
       ),
